@@ -4,7 +4,9 @@ mod util;
 
 use app::App;
 use std::{error::Error, io};
-use termion::{event::Key, input::MouseTerminal, raw::IntoRawMode, screen::AlternateScreen};
+use termion::{
+    event::Key, event::MouseEvent, input::MouseTerminal, raw::IntoRawMode, screen::AlternateScreen,
+};
 use tui::{
     backend::TermionBackend,
     layout::{Constraint, Corner, Direction, Layout},
@@ -184,11 +186,10 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // Terminal initialization
     let stdout = io::stdout().into_raw_mode()?;
-    let stdout = MouseTerminal::from(stdout);
     let stdout = AlternateScreen::from(stdout);
     let backend = TermionBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
-    terminal.hide_cursor()?;
+    //terminal.hide_cursor()?;
 
     let events = Events::new();
 
@@ -205,15 +206,24 @@ fn main() -> Result<(), Box<dyn Error>> {
         terminal.draw(|mut f| {
             let chunks = Layout::default()
                 .direction(Direction::Horizontal)
+                .constraints([Constraint::Percentage(15), Constraint::Percentage(85)].as_ref())
+                .split(f.size());
+            let mut project_size = 10;
+            let mut release_size = 90;
+            if app.active_layer == 0 {
+                project_size = 90;
+                release_size = 10;
+            }
+            let mut release_chunks = Layout::default()
+                .direction(Direction::Vertical)
                 .constraints(
                     [
-                        Constraint::Percentage(15),
-                        Constraint::Percentage(15),
-                        Constraint::Percentage(70),
+                        Constraint::Percentage(project_size),
+                        Constraint::Percentage(release_size),
                     ]
                     .as_ref(),
                 )
-                .split(f.size());
+                .split(chunks[0]);
 
             let style = Style::default().fg(Color::Black).bg(Color::White);
 
@@ -223,7 +233,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 .style(style)
                 .highlight_style(style.fg(Color::LightGreen).modifier(Modifier::BOLD))
                 .highlight_symbol(">");
-            f.render_stateful_widget(items, chunks[0], &mut app.items.state);
+            f.render_stateful_widget(items, release_chunks[0], &mut app.items.state);
 
             let releases_items = app.releases.items.iter().map(|i| Text::raw(i.0.clone()));
             let releases_items = List::new(releases_items)
@@ -231,19 +241,19 @@ fn main() -> Result<(), Box<dyn Error>> {
                 .style(style)
                 .highlight_style(style.fg(Color::LightGreen).modifier(Modifier::BOLD))
                 .highlight_symbol(">");
-            f.render_stateful_widget(releases_items, chunks[1], &mut app.releases.state);
+            f.render_stateful_widget(releases_items, release_chunks[1], &mut app.releases.state);
 
             let feature_chunks = Layout::default()
                 .direction(Direction::Vertical)
                 .constraints(
                     [
-                        Constraint::Percentage(15),
-                        Constraint::Percentage(70),
+                        Constraint::Percentage(20),
+                        Constraint::Percentage(75),
                         Constraint::Percentage(5),
                     ]
                     .as_ref(),
                 )
-                .split(chunks[2]);
+                .split(chunks[1]);
 
             let feature_items = app.features.items.iter().map(|i| Text::raw(i.0.clone()));
             let feature_items = List::new(feature_items)
