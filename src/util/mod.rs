@@ -3,6 +3,7 @@ pub mod event;
 use rand::distributions::{Distribution, Uniform};
 use rand::rngs::ThreadRng;
 use tui::widgets::ListState;
+use tui::widgets::TableState;
 
 #[derive(Clone)]
 pub struct RandomSignal {
@@ -51,6 +52,47 @@ impl Iterator for SinSignal {
         let point = (self.x, (self.x * 1.0 / self.period).sin() * self.scale);
         self.x += self.interval;
         Some(point)
+    }
+}
+
+pub struct StatefulTable {
+    state: TableState,
+    items: Vec<Vec<String>>,
+}
+
+impl StatefulTable {
+    fn new() -> StatefulTable {
+        StatefulTable {
+            state: TableState::default(),
+            items: vec![],
+        }
+    }
+    pub fn next(&mut self) {
+        let i = match self.state.selected() {
+            Some(i) => {
+                if i >= self.items.len() - 1 {
+                    0
+                } else {
+                    i + 1
+                }
+            }
+            None => 0,
+        };
+        self.state.select(Some(i));
+    }
+
+    pub fn previous(&mut self) {
+        let i = match self.state.selected() {
+            Some(i) => {
+                if i == 0 {
+                    self.items.len() - 1
+                } else {
+                    i - 1
+                }
+            }
+            None => 0,
+        };
+        self.state.select(Some(i));
     }
 }
 

@@ -22,6 +22,7 @@ use util::{
 extern crate dirs;
 extern crate dotenv;
 extern crate envy;
+extern crate scarlet;
 extern crate termion;
 #[macro_use]
 extern crate failure;
@@ -93,7 +94,7 @@ struct Env {
     workflow_email: String,
 }
 
-fn main() -> Result<(), Box<dyn Error>> {
+fn load_config() -> Result<(Env, Opt), Box<dyn Error>> {
     //copied config
     let opt = Opt::from_args();
     if opt.verbose {
@@ -158,25 +159,12 @@ fn main() -> Result<(), Box<dyn Error>> {
     if opt.verbose {
         println!("config updated");
     }
-    let repos = match config_info {
-        Some(c) => c.repos.unwrap(),
-        None => vec![RepoConfig {
-            name: opt
-                .repo
-                .clone()
-                .expect("Did not pass in required repo param"),
-            username: config.workflow_login,
-            labels: None,
-        }],
-    };
 
-    if opt.verbose {
-        println!("{:?}", repos);
-    }
+    Ok((config, opt))
+}
 
-    let silent = opt.silent.clone();
-    let verbose = opt.verbose.clone();
-
+fn main() -> Result<(), Box<dyn Error>> {
+    let (config, opt) = load_config().unwrap();
     let aha = aha::Aha::new(
         config.aha_domain,
         config.aha_token,
@@ -262,16 +250,14 @@ fn main() -> Result<(), Box<dyn Error>> {
                 .highlight_style(style.fg(Color::LightGreen).modifier(Modifier::BOLD))
                 .highlight_symbol(">");
             f.render_stateful_widget(feature_items, feature_chunks[0], &mut app.features.state);
-            let text: Vec<Text> = app.feature_text.iter().map(|x| Text::raw(x)).collect();
-            let paragraph = Paragraph::new(text.iter())
+            let paragraph = Paragraph::new(app.feature_text_formatted.iter())
                 .block(Block::default().title("Feature").borders(Borders::ALL))
-                .style(Style::default().fg(Color::White).bg(Color::Black))
                 .wrap(true);
             f.render_widget(paragraph, feature_chunks[1]);
             let events = app
                 .events
                 .iter()
-                .map(|&(evt, level)| Text::raw(format!("{}", app.active_layer)));
+                .map(|&(evt, level)| Text::raw(format!("{}", app.debug_txt)));
             let events_list = List::new(events)
                 .block(Block::default().borders(Borders::ALL).title("dbg"))
                 .start_corner(Corner::BottomLeft);
@@ -301,13 +287,9 @@ fn main() -> Result<(), Box<dyn Error>> {
                 }
                 Key::Right | Key::Char('l') => {
                     if app.active_layer == 2 {
-                        match app.features.state.selected() {
-                            Some(i) => {
-                                app.active_layer = 3;
-                                let feature = app.features.items[i].clone();
-                                app.feature_text = vec![feature.1.to_string()];
-                            }
-                            None => {}
+                        if app.features.state.selected().is_some() {
+                            app.active_layer = 3;
+                            app.format_selected_feature();
                         };
                     }
                     if app.active_layer == 1 {
@@ -371,10 +353,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
                     if app.active_layer == 3 {
                         app.features.next();
-
-                        let i = app.features.state.selected().unwrap();
-                        let feature = app.features.items[i].clone();
-                        app.feature_text = vec![feature.1.to_string()];
+                        app.format_selected_feature();
                     }
                 }
                 Key::Up | Key::Char('k') => {
@@ -390,9 +369,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
                     if app.active_layer == 3 {
                         app.features.previous();
-                        let i = app.features.state.selected().unwrap();
-                        let feature = app.features.items[i].clone();
-                        app.feature_text = vec![feature.1.to_string()];
+                        app.format_selected_feature();
                     }
                 }
                 _ => {}
