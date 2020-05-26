@@ -43,7 +43,8 @@ jobs:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: target/release/aha-cli-amd64
           asset_name: aha-cli-amd64
-          tag: ${{ github.ref }}
+          release_name: "Stable Linux Release ${{ github.ref }}"
+          tag: build-${{ github.ref }}
           overwrite: true
 
   build-mac:
@@ -76,5 +77,6 @@ jobs:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: target/release/aha-cli-darwin
           asset_name: aha-cli-darwin
-          tag: ${{ github.ref }}
+          release_name: "Stable OSX Release ${{ github.ref }}"
+          tag: build-${{ github.ref }}
           overwrite: true
