@@ -3,6 +3,13 @@ name: Rust
 on: [push]
 
 jobs:
+  rustfmt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v1
+      - run: rustup component add rustfmt
+      - run: cargo fmt -- --check
+  
   build:
     runs-on: ubuntu-latest
 
