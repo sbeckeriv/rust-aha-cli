@@ -20,14 +20,14 @@ jobs:
       - name: Build
         run: cargo build --all --release && strip target/release/rust-aha-cli && mv target/release/rust-aha-cli target/release/aha-cli-amd64
 
-      - name: Release
-        uses: softprops/action-gh-release@v1
-        if: startsWith(github.ref, 'refs/tags/')
+      - name: Upload binaries to release
+        uses: svenstaro/upload-release-action@v1-release
         with:
-          files: |
-            target/release/aha-cli-amd64
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: target/release/aha-cli-amd64
+          asset_name: aha-cli-amd64
+          tag: ${{ github.ref }}
+          overwrite: true
 
   build-mac:
     runs-on: macos-latest
@@ -47,11 +47,11 @@ jobs:
       - name: Build for mac
         run: cargo build --all --release && strip target/release/rust-aha-cli && mv target/release/rust-aha-cli target/release/aha-cli-darwin
 
-      - name: Release
-        uses: softprops/action-gh-release@v1
-        if: startsWith(github.ref, 'refs/tags/')
+      - name: Upload binaries to release
+        uses: svenstaro/upload-release-action@v1-release
         with:
-          files: |
-            target/release/aha-cli-darwin
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: target/release/aha-cli-darwin
+          asset_name: aha-cli-darwin
+          tag: ${{ github.ref }}
+          overwrite: true
