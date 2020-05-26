@@ -98,4 +98,3 @@ impl Events {
         self.ignore_exit_key.store(false, Ordering::Relaxed);
     }
 }
-
