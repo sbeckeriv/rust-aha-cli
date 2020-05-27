@@ -268,6 +268,12 @@ impl<'a> Aha<'a> {
         let releases = self.get(releases_url, "features".to_string()).unwrap();
         releases.as_array().unwrap().to_vec()
     }
+    pub fn send_feature(&self, feature: &FeatureCreate) {
+        let uri = format!("https://{}.aha.io/api/v1/features", self.domain);
+        let json_string = serde_json::to_string(&feature).unwrap();
+        let response = self.client.post(&uri).json(&feature).send();
+    }
+
     pub fn create_feature(&self, name: String, notes: i8) -> Result<Value, serde_json::Error> {
         let projects_url = self.url_builder().join("products?per_page=200").unwrap();
         let projects = self.get(projects_url, "products".to_string()).unwrap();
@@ -451,7 +457,7 @@ impl FeatureCreate {
             Some("Description")
         } else if self.description.len() == 0 {
             self.description = data;
-            Some("Description")
+            Some("Needs notes? (Yes/No)")
         } else {
             if data == "Yes" {
                 self.custom_fields = Some(CustomNotes {

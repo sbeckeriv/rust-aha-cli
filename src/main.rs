@@ -287,14 +287,16 @@ fn main() -> Result<(), Box<dyn Error>> {
             let events = app
                 .events
                 .iter()
-                .map(|&(evt, level)| Text::raw(format!("{}", app.debug_txt)));
+                .map(|&(_, _)| Text::raw(format!("{}", app.debug_txt)));
             let events_list = List::new(events)
                 .block(Block::default().borders(Borders::ALL).title("dbg"))
                 .start_corner(Corner::BottomLeft);
             f.render_widget(events_list, feature_chunks[2]);
 
             if app.show_text_box {
-                let block = Block::default().title("Popup").borders(Borders::ALL);
+                let block = Block::default()
+                    .title(&app.text_box_title)
+                    .borders(Borders::ALL);
                 let text = Text::raw(app.text_box.clone());
                 let text_vec = vec![text];
                 let create_paragraph = Paragraph::new(text_vec.iter()).block(block).wrap(true);
@@ -304,7 +306,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 f.render_widget(create_paragraph, area);
             }
         })?;
-        if app.show_text_box {
+        if app.show_text_box && app.releases.state.selected().is_some() {
             match events.next()? {
                 Event::Input(input) => match input {
                     Key::Esc => {
@@ -321,7 +323,34 @@ fn main() -> Result<(), Box<dyn Error>> {
 
                             app.text_box = "".to_string();
                         } else {
+                            app.show_text_box = false;
                             // send
+                            let i = app.releases.state.selected().unwrap();
+                            let project = app.releases.items[i].clone();
+                            app.new_feature.release_id =
+                                project.1["id"].as_str().unwrap().to_string();
+                            aha.send_feature(&app.new_feature);
+
+                            let releases =
+                                aha.features(project.1["id"].as_str().unwrap().to_string());
+
+                            app.features = StatefulList::with_items(
+                                releases
+                                    .iter()
+                                    .map(|project| {
+                                        (
+                                            format!(
+                                                "{} - {}",
+                                                project["name"], project["workflow_status"]["name"]
+                                            ),
+                                            project.clone(),
+                                        )
+                                    })
+                                    .collect(),
+                            );
+
+                            app.new_feature = FeatureCreate::new();
+                            app.text_box_title = "Feature Name".to_string();
                         }
                     }
 
@@ -351,7 +380,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                     Key::Char('c') => {
                         app.show_text_box = true;
                     }
-                    Key::Left | Key::Char('h') => {
+                    Key::Left | Key::Char('h') | Key::Char('\n') => {
                         if app.active_layer == 0 {}
                         if app.active_layer == 1 {
                             app.releases.unselect();
