@@ -45,6 +45,7 @@ use std::io::prelude::*;
 use structopt::StructOpt;
 mod aha;
 mod github;
+use aha::FeatureCreate;
 
 #[derive(StructOpt, Debug)]
 pub struct Opt {
@@ -94,6 +95,35 @@ struct Env {
     workflow_email: String,
 }
 
+use tui::layout::Rect;
+use tui::widgets::Clear;
+
+fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
+    let popup_layout = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints(
+            [
+                Constraint::Percentage((100 - percent_y) / 2),
+                Constraint::Percentage(percent_y),
+                Constraint::Percentage((100 - percent_y) / 2),
+            ]
+            .as_ref(),
+        )
+        .split(r);
+
+    Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints(
+            [
+                Constraint::Percentage((100 - percent_x) / 2),
+                Constraint::Percentage(percent_x),
+                Constraint::Percentage((100 - percent_x) / 2),
+            ]
+            .as_ref(),
+        )
+        .split(popup_layout[1])[1]
+}
+
 fn load_config() -> Result<(Env, Opt), Box<dyn Error>> {
     //copied config
     let opt = Opt::from_args();
@@ -118,14 +148,14 @@ fn load_config() -> Result<(Env, Opt), Box<dyn Error>> {
             }
             let display = path.display();
             let mut file = match File::open(&path) {
-                Err(why) => panic!("couldn't open {}: {}", display, why.description()),
+                Err(why) => panic!("couldn't open {}: {}", display, why.to_string()),
                 Ok(file) => file,
             };
 
             // Read the file contents into a string, returns `io::Result<usize>`
             let mut s = String::new();
             match file.read_to_string(&mut s) {
-                Err(why) => panic!("couldn't read {}: {}", display, why.description()),
+                Err(why) => panic!("couldn't read {}: {}", display, why.to_string()),
                 Ok(_) => (),
             }
             Some(toml::from_str(&s)?)
@@ -202,7 +232,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 project_size = 90;
                 release_size = 10;
             }
-            let mut release_chunks = Layout::default()
+            let release_chunks = Layout::default()
                 .direction(Direction::Vertical)
                 .constraints(
                     [
@@ -262,120 +292,173 @@ fn main() -> Result<(), Box<dyn Error>> {
                 .block(Block::default().borders(Borders::ALL).title("dbg"))
                 .start_corner(Corner::BottomLeft);
             f.render_widget(events_list, feature_chunks[2]);
+
+            if app.show_text_box {
+                let block = Block::default().title("Popup").borders(Borders::ALL);
+                let text = Text::raw(app.text_box.clone());
+                let text_vec = vec![text];
+                let create_paragraph = Paragraph::new(text_vec.iter()).block(block).wrap(true);
+                let size = f.size();
+                let area = centered_rect(60, 20, size);
+                f.render_widget(Clear, area); //this clears out the background
+                f.render_widget(create_paragraph, area);
+            }
         })?;
+        if app.show_text_box {
+            match events.next()? {
+                Event::Input(input) => match input {
+                    Key::Esc => {
+                        //hid
+                        app.show_text_box = false;
 
-        match events.next()? {
-            Event::Input(input) => match input {
-                Key::Char('q') => {
-                    break;
+                        app.new_feature = FeatureCreate::new();
+                        app.text_box_title = "Feature Name".to_string();
+                    }
+
+                    Key::Char('\n') => {
+                        if let Some(title) = app.new_feature.advance(app.text_box.to_string()) {
+                            app.text_box_title = title.to_string();
+
+                            app.text_box = "".to_string();
+                        } else {
+                            // send
+                        }
+                    }
+
+                    Key::Char(c) => {
+                        app.text_box.push(c);
+                    }
+
+                    Key::Backspace => {
+                        app.text_box.pop();
+                    }
+                    _ => {
+
+                        //no opt for arrow keys
+                    }
+                },
+                Event::Tick => {
+                    app.advance();
                 }
-                Key::Left | Key::Char('h') => {
-                    if app.active_layer == 0 {}
-                    if app.active_layer == 1 {
-                        app.releases.unselect();
-                        app.active_layer = 0;
+            }
+        } else {
+            match events.next()? {
+                Event::Input(input) => match input {
+                    Key::Char('q') => {
+                        break;
                     }
 
-                    if app.active_layer == 2 {
-                        app.features.unselect();
-                        app.active_layer = 1;
+                    Key::Char('c') => {
+                        app.show_text_box = true;
                     }
+                    Key::Left | Key::Char('h') => {
+                        if app.active_layer == 0 {}
+                        if app.active_layer == 1 {
+                            app.releases.unselect();
+                            app.active_layer = 0;
+                        }
 
-                    if app.active_layer == 3 {
-                        app.active_layer = 2;
+                        if app.active_layer == 2 {
+                            app.features.unselect();
+                            app.active_layer = 1;
+                        }
+
+                        if app.active_layer == 3 {
+                            app.active_layer = 2;
+                        }
                     }
-                }
-                Key::Right | Key::Char('l') => {
-                    if app.active_layer == 2 {
-                        if app.features.state.selected().is_some() {
-                            app.active_layer = 3;
+                    Key::Right | Key::Char('l') => {
+                        if app.active_layer == 2 {
+                            if app.features.state.selected().is_some() {
+                                app.active_layer = 3;
+                                app.format_selected_feature();
+                            };
+                        }
+                        if app.active_layer == 1 {
+                            match app.releases.state.selected() {
+                                Some(i) => {
+                                    app.active_layer = 2;
+                                    let project = app.releases.items[i].clone();
+                                    let releases =
+                                        aha.features(project.1["id"].as_str().unwrap().to_string());
+
+                                    app.features = StatefulList::with_items(
+                                        releases
+                                            .iter()
+                                            .map(|project| {
+                                                (
+                                                    format!(
+                                                        "{} - {}",
+                                                        project["name"],
+                                                        project["workflow_status"]["name"]
+                                                    ),
+                                                    project.clone(),
+                                                )
+                                            })
+                                            .collect(),
+                                    );
+                                }
+                                None => {}
+                            };
+                        }
+                        if app.active_layer == 0 {
+                            match app.items.state.selected() {
+                                Some(i) => {
+                                    app.active_layer = 1;
+                                    let project = app.items.items[i].clone();
+                                    let releases =
+                                        aha.releases(project.1["id"].as_str().unwrap().to_string());
+
+                                    app.releases = StatefulList::with_items(
+                                        releases
+                                            .iter()
+                                            .map(|project| {
+                                                (project["name"].to_string(), project.clone())
+                                            })
+                                            .collect(),
+                                    );
+                                }
+                                None => {}
+                            };
+                        }
+                    }
+                    Key::Down | Key::Char('j') => {
+                        if app.active_layer == 0 {
+                            app.items.next();
+                        }
+                        if app.active_layer == 1 {
+                            app.releases.next();
+                        }
+                        if app.active_layer == 2 {
+                            app.features.next();
+                        }
+
+                        if app.active_layer == 3 {
+                            app.features.next();
                             app.format_selected_feature();
-                        };
+                        }
                     }
-                    if app.active_layer == 1 {
-                        match app.releases.state.selected() {
-                            Some(i) => {
-                                app.active_layer = 2;
-                                let project = app.releases.items[i].clone();
-                                let releases =
-                                    aha.features(project.1["id"].as_str().unwrap().to_string());
+                    Key::Up | Key::Char('k') => {
+                        if app.active_layer == 0 {
+                            app.items.previous();
+                        }
+                        if app.active_layer == 1 {
+                            app.releases.previous();
+                        }
+                        if app.active_layer == 2 {
+                            app.features.previous();
+                        }
 
-                                app.features = StatefulList::with_items(
-                                    releases
-                                        .iter()
-                                        .map(|project| {
-                                            (
-                                                format!(
-                                                    "{} - {}",
-                                                    project["name"],
-                                                    project["workflow_status"]["name"]
-                                                ),
-                                                project.clone(),
-                                            )
-                                        })
-                                        .collect(),
-                                );
-                            }
-                            None => {}
-                        };
+                        if app.active_layer == 3 {
+                            app.features.previous();
+                            app.format_selected_feature();
+                        }
                     }
-                    if app.active_layer == 0 {
-                        match app.items.state.selected() {
-                            Some(i) => {
-                                app.active_layer = 1;
-                                let project = app.items.items[i].clone();
-                                let releases =
-                                    aha.releases(project.1["id"].as_str().unwrap().to_string());
-
-                                app.releases = StatefulList::with_items(
-                                    releases
-                                        .iter()
-                                        .map(|project| {
-                                            (project["name"].to_string(), project.clone())
-                                        })
-                                        .collect(),
-                                );
-                            }
-                            None => {}
-                        };
-                    }
+                    _ => {}
+                },
+                Event::Tick => {
+                    app.advance();
                 }
-                Key::Down | Key::Char('j') => {
-                    if app.active_layer == 0 {
-                        app.items.next();
-                    }
-                    if app.active_layer == 1 {
-                        app.releases.next();
-                    }
-                    if app.active_layer == 2 {
-                        app.features.next();
-                    }
-
-                    if app.active_layer == 3 {
-                        app.features.next();
-                        app.format_selected_feature();
-                    }
-                }
-                Key::Up | Key::Char('k') => {
-                    if app.active_layer == 0 {
-                        app.items.previous();
-                    }
-                    if app.active_layer == 1 {
-                        app.releases.previous();
-                    }
-                    if app.active_layer == 2 {
-                        app.features.previous();
-                    }
-
-                    if app.active_layer == 3 {
-                        app.features.previous();
-                        app.format_selected_feature();
-                    }
-                }
-                _ => {}
-            },
-            Event::Tick => {
-                app.advance();
             }
         }
     }

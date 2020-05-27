@@ -11,6 +11,8 @@ use tui::{
     widgets::{Block, Borders, List, Paragraph, Text},
     Terminal,
 };
+
+use super::aha::FeatureCreate;
 pub struct App<'a> {
     pub items: StatefulList<(String, Value)>,
     pub releases: StatefulList<(String, Value)>,
@@ -19,6 +21,10 @@ pub struct App<'a> {
     pub debug_txt: String,
     pub feature_text_formatted: Vec<Text<'a>>,
     pub active_layer: i8,
+    pub show_text_box: bool,
+    pub text_box: String,
+    pub text_box_title: String,
+    pub new_feature: FeatureCreate,
     pub events: Vec<(&'a str, &'a str)>,
     pub info_style: Style,
     pub warning_style: Style,
@@ -36,6 +42,10 @@ impl<'a> App<'a> {
             feature_text_formatted: vec![Text::raw("")],
             debug_txt: "".to_string(),
             active_layer: 0,
+            show_text_box: false,
+            new_feature: FeatureCreate::new(),
+            text_box: "".to_string(),
+            text_box_title: "Feature Name".to_string(),
             events: vec![("Event1", "INFO")],
             info_style: Style::default().fg(Color::White),
             warning_style: Style::default().fg(Color::Yellow),

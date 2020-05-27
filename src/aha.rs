@@ -307,6 +307,7 @@ impl<'a> Aha<'a> {
 
         let feature = FeatureCreate {
             name,
+            description: "".to_string(),
             release_id: releases[index]["id"].as_str().unwrap().to_string(),
             custom_fields: notes_required,
         };
@@ -429,10 +430,37 @@ impl<'a> Aha<'a> {
 // keep
 #[derive(Serialize, Debug, Deserialize)]
 pub struct FeatureCreate {
-    name: String,
-    release_id: String,
+    pub name: String,
+    pub description: String,
+    pub release_id: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub custom_fields: Option<CustomNotes>,
+}
+impl FeatureCreate {
+    pub fn new() -> FeatureCreate {
+        FeatureCreate {
+            name: "".to_string(),
+            description: "".to_string(),
+            release_id: "".to_string(),
+            custom_fields: None,
+        }
+    }
+    pub fn advance(&mut self, data: String) -> Option<&str> {
+        if self.name.len() == 0 {
+            self.name = data;
+            Some("Description")
+        } else if self.description.len() == 0 {
+            self.description = data;
+            Some("Description")
+        } else {
+            if data == "Yes" {
+                self.custom_fields = Some(CustomNotes {
+                    notes: "Required".to_string(),
+                })
+            }
+            None
+        }
+    }
 }
 
 // keep
