@@ -4,9 +4,7 @@ mod util;
 
 use app::App;
 use std::{error::Error, io};
-use termion::{
-    raw::IntoRawMode, screen::AlternateScreen,
-};
+use termion::{raw::IntoRawMode, screen::AlternateScreen};
 use tui::{
     backend::TermionBackend,
     layout::{Constraint, Corner, Direction, Layout},
@@ -14,10 +12,7 @@ use tui::{
     widgets::{Block, Borders, List, Paragraph, Text},
     Terminal,
 };
-use util::{
-    event::{Events},
-    StatefulList,
-};
+use util::{event::Events, StatefulList};
 
 extern crate dirs;
 extern crate dotenv;
@@ -46,7 +41,6 @@ use structopt::StructOpt;
 mod aha;
 mod github;
 use aha::Aha;
-
 
 #[derive(StructOpt, Debug)]
 pub struct Opt {

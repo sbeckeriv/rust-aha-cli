@@ -3,12 +3,10 @@ use super::Aha;
 
 use scarlet::color::RGBColor;
 
-use super::util::event::{Event};
+use super::util::event::Event;
 use serde_json::Value;
 
-use termion::{
-    event::Key,
-};
+use termion::event::Key;
 use tui::{
     backend::TermionBackend,
     layout::{Constraint, Corner, Direction, Layout},
