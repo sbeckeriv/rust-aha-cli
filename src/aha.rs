@@ -270,8 +270,8 @@ impl<'a> Aha<'a> {
     }
     pub fn send_feature(&self, feature: &FeatureCreate) {
         let uri = format!("https://{}.aha.io/api/v1/features", self.domain);
-        let json_string = serde_json::to_string(&feature).unwrap();
-        let response = self.client.post(&uri).json(&feature).send();
+        let _json_string = serde_json::to_string(&feature).unwrap();
+        let _response = self.client.post(&uri).json(&feature).send();
     }
 
     pub fn create_feature(&self, name: String, notes: i8) -> Result<Value, serde_json::Error> {

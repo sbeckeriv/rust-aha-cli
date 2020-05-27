@@ -1,9 +1,14 @@
 use super::util::StatefulList;
-use scarlet::color;
+use super::Aha;
+
 use scarlet::color::RGBColor;
 
+use super::util::event::{Event};
 use serde_json::Value;
-use termion::color::Rgb;
+
+use termion::{
+    event::Key,
+};
 use tui::{
     backend::TermionBackend,
     layout::{Constraint, Corner, Direction, Layout},
@@ -106,5 +111,201 @@ impl<'a> App<'a> {
             }
             None => {}
         };
+    }
+
+    pub fn handle_create_popup(&mut self, event: Event<Key>, aha: &Aha) -> Option<()> {
+        match event {
+            Event::Input(input) => match input {
+                Key::Esc => {
+                    //hide
+                    self.show_text_box = false;
+
+                    self.new_feature = FeatureCreate::new();
+                    self.text_box_title = "Feature Name".to_string();
+                }
+
+                Key::Char('\n') => {
+                    if let Some(title) = self.new_feature.advance(self.text_box.to_string()) {
+                        self.text_box_title = title.to_string();
+
+                        self.text_box = "".to_string();
+                    } else {
+                        self.show_text_box = false;
+                        self.text_box = "".to_string();
+                        // send
+                        let i = self.releases.state.selected().unwrap();
+                        let project = self.releases.items[i].clone();
+                        self.new_feature.release_id = project.1["id"].as_str().unwrap().to_string();
+                        aha.send_feature(&self.new_feature);
+
+                        let releases = aha.features(project.1["id"].as_str().unwrap().to_string());
+
+                        self.features = StatefulList::with_items(
+                            releases
+                                .iter()
+                                .map(|project| {
+                                    (
+                                        format!(
+                                            "{} - {}",
+                                            project["name"], project["workflow_status"]["name"]
+                                        ),
+                                        project.clone(),
+                                    )
+                                })
+                                .collect(),
+                        );
+
+                        self.new_feature = FeatureCreate::new();
+                        self.text_box_title = "Feature Name".to_string();
+                    }
+                }
+
+                Key::Char(c) => {
+                    self.text_box.push(c);
+                }
+
+                Key::Backspace => {
+                    self.text_box.pop();
+                }
+                _ => {
+
+                    //no opt for arrow keys
+                }
+            },
+            Event::Tick => {
+                self.advance();
+            }
+        }
+        //dont break from here
+        Some(())
+    }
+
+    pub fn handle_nav(&mut self, event: Event<Key>, aha: &Aha) -> Option<()> {
+        match event {
+            Event::Input(input) => match input {
+                Key::Char('q') => None,
+
+                Key::Char('c') => {
+                    self.show_text_box = true;
+                    Some(())
+                }
+                Key::Left | Key::Char('h') | Key::Char('\n') => {
+                    if self.active_layer == 0 {}
+                    if self.active_layer == 1 {
+                        self.releases.unselect();
+                        self.active_layer = 0;
+                    }
+
+                    if self.active_layer == 2 {
+                        self.features.unselect();
+                        self.active_layer = 1;
+                    }
+
+                    if self.active_layer == 3 {
+                        self.active_layer = 2;
+                    }
+
+                    Some(())
+                }
+                Key::Right | Key::Char('l') => {
+                    if self.active_layer == 2 {
+                        if self.features.state.selected().is_some() {
+                            self.active_layer = 3;
+                            self.format_selected_feature();
+                        };
+                    }
+                    if self.active_layer == 1 {
+                        match self.releases.state.selected() {
+                            Some(i) => {
+                                self.active_layer = 2;
+                                let project = self.releases.items[i].clone();
+                                let releases =
+                                    aha.features(project.1["id"].as_str().unwrap().to_string());
+
+                                self.features = StatefulList::with_items(
+                                    releases
+                                        .iter()
+                                        .map(|project| {
+                                            (
+                                                format!(
+                                                    "{} - {}",
+                                                    project["name"],
+                                                    project["workflow_status"]["name"]
+                                                ),
+                                                project.clone(),
+                                            )
+                                        })
+                                        .collect(),
+                                );
+                            }
+                            None => {}
+                        };
+                    }
+                    if self.active_layer == 0 {
+                        match self.items.state.selected() {
+                            Some(i) => {
+                                self.active_layer = 1;
+                                let project = self.items.items[i].clone();
+                                let releases =
+                                    aha.releases(project.1["id"].as_str().unwrap().to_string());
+
+                                self.releases = StatefulList::with_items(
+                                    releases
+                                        .iter()
+                                        .map(|project| {
+                                            (project["name"].to_string(), project.clone())
+                                        })
+                                        .collect(),
+                                );
+                            }
+                            None => {}
+                        };
+                    }
+
+                    Some(())
+                }
+                Key::Down | Key::Char('j') => {
+                    if self.active_layer == 0 {
+                        self.items.next();
+                    }
+                    if self.active_layer == 1 {
+                        self.releases.next();
+                    }
+                    if self.active_layer == 2 {
+                        self.features.next();
+                    }
+
+                    if self.active_layer == 3 {
+                        self.features.next();
+                        self.format_selected_feature();
+                    }
+
+                    Some(())
+                }
+                Key::Up | Key::Char('k') => {
+                    if self.active_layer == 0 {
+                        self.items.previous();
+                    }
+                    if self.active_layer == 1 {
+                        self.releases.previous();
+                    }
+                    if self.active_layer == 2 {
+                        self.features.previous();
+                    }
+
+                    if self.active_layer == 3 {
+                        self.features.previous();
+                        self.format_selected_feature();
+                    }
+
+                    Some(())
+                }
+                _ => Some(()),
+            },
+            Event::Tick => {
+                self.advance();
+                Some(())
+            }
+        }
     }
 }

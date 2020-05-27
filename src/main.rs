@@ -5,7 +5,7 @@ mod util;
 use app::App;
 use std::{error::Error, io};
 use termion::{
-    event::Key, event::MouseEvent, input::MouseTerminal, raw::IntoRawMode, screen::AlternateScreen,
+    raw::IntoRawMode, screen::AlternateScreen,
 };
 use tui::{
     backend::TermionBackend,
@@ -15,7 +15,7 @@ use tui::{
     Terminal,
 };
 use util::{
-    event::{Event, Events},
+    event::{Events},
     StatefulList,
 };
 
@@ -45,7 +45,8 @@ use std::io::prelude::*;
 use structopt::StructOpt;
 mod aha;
 mod github;
-use aha::FeatureCreate;
+use aha::Aha;
+
 
 #[derive(StructOpt, Debug)]
 pub struct Opt {
@@ -195,7 +196,7 @@ fn load_config() -> Result<(Env, Opt), Box<dyn Error>> {
 
 fn main() -> Result<(), Box<dyn Error>> {
     let (config, opt) = load_config().unwrap();
-    let aha = aha::Aha::new(
+    let aha = Aha::new(
         config.aha_domain,
         config.aha_token,
         config.workflow_email,
@@ -306,188 +307,15 @@ fn main() -> Result<(), Box<dyn Error>> {
                 f.render_widget(create_paragraph, area);
             }
         })?;
-        if app.show_text_box && app.releases.state.selected().is_some() {
-            match events.next()? {
-                Event::Input(input) => match input {
-                    Key::Esc => {
-                        //hid
-                        app.show_text_box = false;
 
-                        app.new_feature = FeatureCreate::new();
-                        app.text_box_title = "Feature Name".to_string();
-                    }
-
-                    Key::Char('\n') => {
-                        if let Some(title) = app.new_feature.advance(app.text_box.to_string()) {
-                            app.text_box_title = title.to_string();
-
-                            app.text_box = "".to_string();
-                        } else {
-                            app.show_text_box = false;
-                            // send
-                            let i = app.releases.state.selected().unwrap();
-                            let project = app.releases.items[i].clone();
-                            app.new_feature.release_id =
-                                project.1["id"].as_str().unwrap().to_string();
-                            aha.send_feature(&app.new_feature);
-
-                            let releases =
-                                aha.features(project.1["id"].as_str().unwrap().to_string());
-
-                            app.features = StatefulList::with_items(
-                                releases
-                                    .iter()
-                                    .map(|project| {
-                                        (
-                                            format!(
-                                                "{} - {}",
-                                                project["name"], project["workflow_status"]["name"]
-                                            ),
-                                            project.clone(),
-                                        )
-                                    })
-                                    .collect(),
-                            );
-
-                            app.new_feature = FeatureCreate::new();
-                            app.text_box_title = "Feature Name".to_string();
-                        }
-                    }
-
-                    Key::Char(c) => {
-                        app.text_box.push(c);
-                    }
-
-                    Key::Backspace => {
-                        app.text_box.pop();
-                    }
-                    _ => {
-
-                        //no opt for arrow keys
-                    }
-                },
-                Event::Tick => {
-                    app.advance();
-                }
-            }
-        } else {
-            match events.next()? {
-                Event::Input(input) => match input {
-                    Key::Char('q') => {
-                        break;
-                    }
-
-                    Key::Char('c') => {
-                        app.show_text_box = true;
-                    }
-                    Key::Left | Key::Char('h') | Key::Char('\n') => {
-                        if app.active_layer == 0 {}
-                        if app.active_layer == 1 {
-                            app.releases.unselect();
-                            app.active_layer = 0;
-                        }
-
-                        if app.active_layer == 2 {
-                            app.features.unselect();
-                            app.active_layer = 1;
-                        }
-
-                        if app.active_layer == 3 {
-                            app.active_layer = 2;
-                        }
-                    }
-                    Key::Right | Key::Char('l') => {
-                        if app.active_layer == 2 {
-                            if app.features.state.selected().is_some() {
-                                app.active_layer = 3;
-                                app.format_selected_feature();
-                            };
-                        }
-                        if app.active_layer == 1 {
-                            match app.releases.state.selected() {
-                                Some(i) => {
-                                    app.active_layer = 2;
-                                    let project = app.releases.items[i].clone();
-                                    let releases =
-                                        aha.features(project.1["id"].as_str().unwrap().to_string());
-
-                                    app.features = StatefulList::with_items(
-                                        releases
-                                            .iter()
-                                            .map(|project| {
-                                                (
-                                                    format!(
-                                                        "{} - {}",
-                                                        project["name"],
-                                                        project["workflow_status"]["name"]
-                                                    ),
-                                                    project.clone(),
-                                                )
-                                            })
-                                            .collect(),
-                                    );
-                                }
-                                None => {}
-                            };
-                        }
-                        if app.active_layer == 0 {
-                            match app.items.state.selected() {
-                                Some(i) => {
-                                    app.active_layer = 1;
-                                    let project = app.items.items[i].clone();
-                                    let releases =
-                                        aha.releases(project.1["id"].as_str().unwrap().to_string());
-
-                                    app.releases = StatefulList::with_items(
-                                        releases
-                                            .iter()
-                                            .map(|project| {
-                                                (project["name"].to_string(), project.clone())
-                                            })
-                                            .collect(),
-                                    );
-                                }
-                                None => {}
-                            };
-                        }
-                    }
-                    Key::Down | Key::Char('j') => {
-                        if app.active_layer == 0 {
-                            app.items.next();
-                        }
-                        if app.active_layer == 1 {
-                            app.releases.next();
-                        }
-                        if app.active_layer == 2 {
-                            app.features.next();
-                        }
-
-                        if app.active_layer == 3 {
-                            app.features.next();
-                            app.format_selected_feature();
-                        }
-                    }
-                    Key::Up | Key::Char('k') => {
-                        if app.active_layer == 0 {
-                            app.items.previous();
-                        }
-                        if app.active_layer == 1 {
-                            app.releases.previous();
-                        }
-                        if app.active_layer == 2 {
-                            app.features.previous();
-                        }
-
-                        if app.active_layer == 3 {
-                            app.features.previous();
-                            app.format_selected_feature();
-                        }
-                    }
-                    _ => {}
-                },
-                Event::Tick => {
-                    app.advance();
-                }
+        if let Ok(event) = events.next() {
+            let result = if app.show_text_box && app.releases.state.selected().is_some() {
+                app.handle_create_popup(event, &aha)
+            } else {
+                app.handle_nav(event, &aha)
+            };
+            if result.is_none() {
+                break;
             }
         }
     }
