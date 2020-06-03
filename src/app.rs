@@ -8,13 +8,15 @@ use serde_json::Value;
 
 use termion::event::Key;
 use tui::{
-    backend::TermionBackend,
-    layout::{Constraint, Corner, Direction, Layout},
     style::{Color, Modifier, Style},
-    widgets::{Block, Borders, List, Paragraph, Text},
-    Terminal,
+    widgets::Text,
 };
-
+#[derive(PartialEq)]
+pub enum Popup {
+    Text,
+    None,
+    Search,
+}
 use super::aha::FeatureCreate;
 pub struct App<'a> {
     pub items: StatefulList<(String, Value)>,
@@ -24,7 +26,7 @@ pub struct App<'a> {
     pub debug_txt: String,
     pub feature_text_formatted: Vec<Text<'a>>,
     pub active_layer: i8,
-    pub show_text_box: bool,
+    pub popup: Popup,
     pub text_box: String,
     pub text_box_title: String,
     pub new_feature: FeatureCreate,
@@ -38,14 +40,24 @@ pub struct App<'a> {
 impl<'a> App<'a> {
     pub fn new() -> App<'a> {
         App {
+            popup: Popup::None,
             items: StatefulList::with_items(vec![]),
             releases: StatefulList::with_items(vec![]),
             features: StatefulList::with_items(vec![]),
             feature_text: vec!["".to_string()],
-            feature_text_formatted: vec![Text::raw("")],
+            feature_text_formatted: vec![
+                Text::raw("Poor instructions\n"),
+                Text::raw("\n===================\n"),
+                Text::raw("j up a list\n"),
+                Text::raw("k down a list down\n"),
+                Text::raw("l enter selected item\n"),
+                Text::raw("h previous section\n"),
+                Text::raw("c create feature if release selected.\n"),
+                Text::raw("q exit\n"),
+                Text::raw("esc to close popups\n"),
+            ],
             debug_txt: "".to_string(),
             active_layer: 0,
-            show_text_box: false,
             new_feature: FeatureCreate::new(),
             text_box: "".to_string(),
             text_box_title: "Feature Name".to_string(),
@@ -111,12 +123,41 @@ impl<'a> App<'a> {
         };
     }
 
+    pub fn handle_search_popup(&mut self, event: Event<Key>, aha: &Aha) -> Option<()> {
+        match event {
+            Event::Input(input) => match input {
+                Key::Esc => {
+                    //hide
+                    self.popup = Popup::None;
+                }
+
+                Key::Char('\n') => {}
+
+                Key::Char(c) => {
+                    self.text_box.push(c);
+                }
+
+                Key::Backspace => {
+                    self.text_box.pop();
+                }
+                _ => {
+
+                    //no opt for arrow keys
+                }
+            },
+            Event::Tick => {
+                self.advance();
+            }
+        }
+        //dont break from here
+        Some(())
+    }
     pub fn handle_create_popup(&mut self, event: Event<Key>, aha: &Aha) -> Option<()> {
         match event {
             Event::Input(input) => match input {
                 Key::Esc => {
                     //hide
-                    self.show_text_box = false;
+                    self.popup = Popup::None;
 
                     self.new_feature = FeatureCreate::new();
                     self.text_box_title = "Feature Name".to_string();
@@ -128,7 +169,7 @@ impl<'a> App<'a> {
 
                         self.text_box = "".to_string();
                     } else {
-                        self.show_text_box = false;
+                        self.popup = Popup::None;
                         self.text_box = "".to_string();
                         // send
                         let i = self.releases.state.selected().unwrap();
@@ -183,8 +224,12 @@ impl<'a> App<'a> {
             Event::Input(input) => match input {
                 Key::Char('q') => None,
 
+                Key::Char('s') => {
+                    self.popup = Popup::Search;
+                    Some(())
+                }
                 Key::Char('c') => {
-                    self.show_text_box = true;
+                    self.popup = Popup::Text;
                     Some(())
                 }
                 Key::Left | Key::Char('h') | Key::Char('\n') => {
@@ -298,7 +343,10 @@ impl<'a> App<'a> {
 
                     Some(())
                 }
-                _ => Some(()),
+                _ => {
+                    self.debug_txt = format!("{:?}", input);
+                    Some(())
+                }
             },
             Event::Tick => {
                 self.advance();

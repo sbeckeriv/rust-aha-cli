@@ -2,7 +2,7 @@ mod app;
 #[allow(dead_code)]
 mod util;
 
-use app::App;
+use app::{App, Popup};
 use std::{error::Error, io};
 use termion::{raw::IntoRawMode, screen::AlternateScreen};
 use tui::{
@@ -287,24 +287,38 @@ fn main() -> Result<(), Box<dyn Error>> {
                 .block(Block::default().borders(Borders::ALL).title("dbg"))
                 .start_corner(Corner::BottomLeft);
             f.render_widget(events_list, feature_chunks[2]);
-
-            if app.show_text_box {
-                let block = Block::default()
-                    .title(&app.text_box_title)
-                    .borders(Borders::ALL);
-                let text = Text::raw(app.text_box.clone());
-                let text_vec = vec![text];
-                let create_paragraph = Paragraph::new(text_vec.iter()).block(block).wrap(true);
-                let size = f.size();
-                let area = centered_rect(60, 20, size);
-                f.render_widget(Clear, area); //this clears out the background
-                f.render_widget(create_paragraph, area);
+            match app.popup {
+                Popup::Text => {
+                    let block = Block::default()
+                        .title(&app.text_box_title)
+                        .borders(Borders::ALL);
+                    let text = Text::raw(app.text_box.clone());
+                    let text_vec = vec![text];
+                    let create_paragraph = Paragraph::new(text_vec.iter()).block(block).wrap(true);
+                    let size = f.size();
+                    let area = centered_rect(60, 20, size);
+                    f.render_widget(Clear, area); //this clears out the background
+                    f.render_widget(create_paragraph, area);
+                }
+                Popup::Search => {
+                    let block = Block::default().title("Search").borders(Borders::ALL);
+                    let text = Text::raw(app.text_box.clone());
+                    let text_vec = vec![text];
+                    let create_paragraph = Paragraph::new(text_vec.iter()).block(block).wrap(true);
+                    let size = f.size();
+                    let area = centered_rect(60, 50, size);
+                    f.render_widget(Clear, area); //this clears out the background
+                    f.render_widget(create_paragraph, area);
+                }
+                _ => {}
             }
         })?;
 
         if let Ok(event) = events.next() {
-            let result = if app.show_text_box && app.releases.state.selected().is_some() {
+            let result = if app.popup == Popup::Text && app.releases.state.selected().is_some() {
                 app.handle_create_popup(event, &aha)
+            } else if app.popup == Popup::Search {
+                app.handle_search_popup(event, &aha)
             } else {
                 app.handle_nav(event, &aha)
             };
