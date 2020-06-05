@@ -39,23 +39,13 @@ pub struct App<'a> {
 
 impl<'a> App<'a> {
     pub fn new() -> App<'a> {
-        App {
+        let mut app = App {
             popup: Popup::None,
             items: StatefulList::with_items(vec![]),
             releases: StatefulList::with_items(vec![]),
             features: StatefulList::with_items(vec![]),
             feature_text: vec!["".to_string()],
-            feature_text_formatted: vec![
-                Text::raw("Poor instructions\n"),
-                Text::raw("\n===================\n"),
-                Text::raw("j up a list\n"),
-                Text::raw("k down a list down\n"),
-                Text::raw("l enter selected item\n"),
-                Text::raw("h previous section\n"),
-                Text::raw("c create feature if release selected.\n"),
-                Text::raw("q exit\n"),
-                Text::raw("esc to close popups\n"),
-            ],
+            feature_text_formatted: vec![],
             debug_txt: "".to_string(),
             active_layer: 0,
             new_feature: FeatureCreate::new(),
@@ -66,6 +56,26 @@ impl<'a> App<'a> {
             warning_style: Style::default().fg(Color::Yellow),
             error_style: Style::default().fg(Color::Magenta),
             critical_style: Style::default().fg(Color::Red),
+        };
+        app
+    }
+    pub fn help_text(&mut self) {
+        if self.active_layer != 3 {
+            let mut base = vec![
+                Text::raw("Poor instructions\n"),
+                Text::raw("\n===================\n"),
+                Text::raw("j ↑ - up a list\n"),
+                Text::raw("k ↓ - down a list down\n"),
+                Text::raw("l → enter - enter selected item\n"),
+                Text::raw("h ← - previous section\n"),
+                Text::raw("q - exit\n"),
+                Text::raw("esc - to close popups\n"),
+            ];
+            if self.active_layer > 0 {
+                base.push(Text::raw("\nRelease Actions:\n"));
+                base.push(Text::raw("c - create feature if release selected.\n"));
+            }
+            self.feature_text_formatted = base;
         }
     }
 
@@ -225,14 +235,17 @@ impl<'a> App<'a> {
                 Key::Char('q') => None,
 
                 Key::Char('s') => {
+                    self.debug_txt = format!("search");
                     self.popup = Popup::Search;
                     Some(())
                 }
                 Key::Char('c') => {
+                    self.debug_txt = format!("create");
                     self.popup = Popup::Text;
                     Some(())
                 }
-                Key::Left | Key::Char('h') | Key::Char('\n') => {
+                Key::Left | Key::Char('h') => {
+                    self.debug_txt = format!("back");
                     if self.active_layer == 0 {}
                     if self.active_layer == 1 {
                         self.releases.unselect();
@@ -250,7 +263,8 @@ impl<'a> App<'a> {
 
                     Some(())
                 }
-                Key::Right | Key::Char('l') => {
+                Key::Right | Key::Char('l') | Key::Char('\n') => {
+                    self.debug_txt = format!("over");
                     if self.active_layer == 2 {
                         if self.features.state.selected().is_some() {
                             self.active_layer = 3;
@@ -308,6 +322,7 @@ impl<'a> App<'a> {
                     Some(())
                 }
                 Key::Down | Key::Char('j') => {
+                    self.debug_txt = format!("down");
                     if self.active_layer == 0 {
                         self.items.next();
                     }
@@ -326,6 +341,7 @@ impl<'a> App<'a> {
                     Some(())
                 }
                 Key::Up | Key::Char('k') => {
+                    self.debug_txt = format!("up");
                     if self.active_layer == 0 {
                         self.items.previous();
                     }

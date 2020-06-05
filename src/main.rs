@@ -2,18 +2,8 @@ mod app;
 #[allow(dead_code)]
 mod util;
 
-use app::{App, Popup};
-use std::{error::Error, io};
-use termion::{raw::IntoRawMode, screen::AlternateScreen};
-use tui::{
-    backend::TermionBackend,
-    layout::{Constraint, Corner, Direction, Layout},
-    style::{Color, Modifier, Style},
-    widgets::{Block, Borders, List, Paragraph, Text},
-    Terminal,
-};
-use util::{event::Events, StatefulList};
-
+#[macro_use]
+extern crate debug_stub_derive;
 extern crate dirs;
 extern crate dotenv;
 extern crate envy;
@@ -40,7 +30,19 @@ use std::io::prelude::*;
 use structopt::StructOpt;
 mod aha;
 mod github;
+
 use aha::Aha;
+use app::{App, Popup};
+use std::{error::Error, io};
+use termion::{raw::IntoRawMode, screen::AlternateScreen};
+use tui::{
+    backend::TermionBackend,
+    layout::{Constraint, Corner, Direction, Layout},
+    style::{Color, Modifier, Style},
+    widgets::{Block, Borders, List, Paragraph, Text},
+    Terminal,
+};
+use util::{event::Events, StatefulList};
 
 #[derive(StructOpt, Debug)]
 pub struct Opt {
@@ -217,9 +219,16 @@ fn main() -> Result<(), Box<dyn Error>> {
     );
     loop {
         terminal.draw(|mut f| {
+            app.help_text();
+            let mut menu = 30;
+            let mut main = 70;
+            if app.active_layer >= 2 {
+                menu = 0;
+                main = 100;
+            }
             let chunks = Layout::default()
                 .direction(Direction::Horizontal)
-                .constraints([Constraint::Percentage(15), Constraint::Percentage(85)].as_ref())
+                .constraints([Constraint::Percentage(menu), Constraint::Percentage(main)].as_ref())
                 .split(f.size());
             let mut project_size = 10;
             let mut release_size = 90;
@@ -243,25 +252,28 @@ fn main() -> Result<(), Box<dyn Error>> {
             let items = app.items.items.iter().map(|i| Text::raw(i.0.clone()));
             let items = List::new(items)
                 .block(Block::default().borders(Borders::ALL).title("Projects"))
-                .style(style)
-                .highlight_style(style.fg(Color::LightGreen).modifier(Modifier::BOLD))
+                .highlight_style(style.fg(Color::Black).modifier(Modifier::BOLD))
                 .highlight_symbol(">");
             f.render_stateful_widget(items, release_chunks[0], &mut app.items.state);
 
             let releases_items = app.releases.items.iter().map(|i| Text::raw(i.0.clone()));
             let releases_items = List::new(releases_items)
                 .block(Block::default().borders(Borders::ALL).title("Releases"))
-                .style(style)
-                .highlight_style(style.fg(Color::LightGreen).modifier(Modifier::BOLD))
+                .highlight_style(style.fg(Color::Black).modifier(Modifier::BOLD))
                 .highlight_symbol(">");
             f.render_stateful_widget(releases_items, release_chunks[1], &mut app.releases.state);
-
+            let mut feature_list = 10;
+            let mut feature_show = 85;
+            if app.active_layer == 2 {
+                feature_list = 40;
+                feature_show = 60;
+            }
             let feature_chunks = Layout::default()
                 .direction(Direction::Vertical)
                 .constraints(
                     [
-                        Constraint::Percentage(20),
-                        Constraint::Percentage(75),
+                        Constraint::Percentage(feature_list),
+                        Constraint::Percentage(feature_show),
                         Constraint::Percentage(5),
                     ]
                     .as_ref(),
@@ -271,8 +283,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             let feature_items = app.features.items.iter().map(|i| Text::raw(i.0.clone()));
             let feature_items = List::new(feature_items)
                 .block(Block::default().borders(Borders::ALL).title("Features"))
-                .style(style)
-                .highlight_style(style.fg(Color::LightGreen).modifier(Modifier::BOLD))
+                .highlight_style(style.fg(Color::Black).modifier(Modifier::BOLD))
                 .highlight_symbol(">");
             f.render_stateful_widget(feature_items, feature_chunks[0], &mut app.features.state);
             let paragraph = Paragraph::new(app.feature_text_formatted.iter())
