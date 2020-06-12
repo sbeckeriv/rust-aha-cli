@@ -174,11 +174,13 @@ impl<'a> App<'a> {
                 }
 
                 Key::Char('\n') => {
+                    self.debug_txt = format!("enter");
                     if let Some(title) = self.new_feature.advance(self.text_box.to_string()) {
                         self.text_box_title = title.to_string();
 
                         self.text_box = "".to_string();
                     } else {
+                        self.debug_txt = format!("sending feature");
                         self.popup = Popup::None;
                         self.text_box = "".to_string();
                         // send
@@ -204,20 +206,23 @@ impl<'a> App<'a> {
                                 .collect(),
                         );
 
+                        self.debug_txt = format!("feature created");
                         self.new_feature = FeatureCreate::new();
                         self.text_box_title = "Feature Name".to_string();
                     }
                 }
 
                 Key::Char(c) => {
+                    self.debug_txt = format!("char {}", c);
                     self.text_box.push(c);
                 }
 
                 Key::Backspace => {
+                    self.debug_txt = format!("backspace");
                     self.text_box.pop();
                 }
                 _ => {
-
+                    self.debug_txt = format!("no opt");
                     //no opt for arrow keys
                 }
             },
@@ -232,7 +237,10 @@ impl<'a> App<'a> {
     pub fn handle_nav(&mut self, event: Event<Key>, aha: &Aha) -> Option<()> {
         match event {
             Event::Input(input) => match input {
-                Key::Char('q') => None,
+                Key::Char('q') => {
+                    self.debug_txt = format!("q exit");
+                    None
+                }
 
                 Key::Char('s') => {
                     self.debug_txt = format!("search");

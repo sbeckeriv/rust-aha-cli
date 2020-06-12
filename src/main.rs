@@ -206,7 +206,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut terminal = Terminal::new(backend)?;
     //terminal.hide_cursor()?;
 
-    let events = Events::new();
+    let mut events = Events::new();
 
     // App
     let mut app = App::new();
@@ -266,7 +266,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             let mut feature_show = 85;
             if app.active_layer == 2 {
                 feature_list = 40;
-                feature_show = 60;
+                feature_show = 55;
             }
             let feature_chunks = Layout::default()
                 .direction(Direction::Vertical)
@@ -290,11 +290,11 @@ fn main() -> Result<(), Box<dyn Error>> {
                 .block(Block::default().title("Feature").borders(Borders::ALL))
                 .wrap(true);
             f.render_widget(paragraph, feature_chunks[1]);
-            let events = app
+            let events_list = app
                 .events
                 .iter()
                 .map(|&(_, _)| Text::raw(format!("{}", app.debug_txt)));
-            let events_list = List::new(events)
+            let events_list = List::new(events_list)
                 .block(Block::default().borders(Borders::ALL).title("dbg"))
                 .start_corner(Corner::BottomLeft);
             f.render_widget(events_list, feature_chunks[2]);
@@ -327,10 +327,15 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         if let Ok(event) = events.next() {
             let result = if app.popup == Popup::Text && app.releases.state.selected().is_some() {
-                app.handle_create_popup(event, &aha)
+                let x = app.handle_create_popup(event, &aha);
+                events.disable_exit_key();
+                x
             } else if app.popup == Popup::Search {
-                app.handle_search_popup(event, &aha)
+                let x = app.handle_search_popup(event, &aha);
+                events.disable_exit_key();
+                x
             } else {
+                events.enable_exit_key();
                 app.handle_nav(event, &aha)
             };
             if result.is_none() {
