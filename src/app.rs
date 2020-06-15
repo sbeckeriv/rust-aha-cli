@@ -6,11 +6,24 @@ use scarlet::color::RGBColor;
 use super::util::event::Event;
 use serde_json::Value;
 
+use dirs;
+use std::fs::File;
+use std::io::prelude::*;
+use std::path::Path;
 use termion::event::Key;
 use tui::{
     style::{Color, Modifier, Style},
     widgets::Text,
 };
+
+// auto select the menus based on last view
+#[derive(Deserialize, Serialize, Clone)]
+pub struct History {
+    pub project: Option<String>,
+    pub release: Option<String>,
+    pub feature: Option<String>,
+}
+
 #[derive(PartialEq)]
 pub enum Popup {
     Text,
@@ -35,6 +48,7 @@ pub struct App<'a> {
     pub warning_style: Style,
     pub error_style: Style,
     pub critical_style: Style,
+    pub history: Option<History>,
 }
 
 impl<'a> App<'a> {
@@ -46,6 +60,7 @@ impl<'a> App<'a> {
             features: StatefulList::with_items(vec![]),
             feature_text: vec!["".to_string()],
             feature_text_formatted: vec![],
+            history: None,
             debug_txt: "".to_string(),
             active_layer: 0,
             new_feature: FeatureCreate::new(),
@@ -58,6 +73,124 @@ impl<'a> App<'a> {
             critical_style: Style::default().fg(Color::Red),
         };
         app
+    }
+
+    pub fn load_features(&mut self, release_id: String, aha: &Aha) {
+        let feature_list = aha.features(release_id.clone());
+
+        self.write_history("release".to_string(), release_id);
+        self.features = StatefulList::with_items(
+            feature_list
+                .iter()
+                .map(|project| {
+                    (
+                        format!(
+                            "{} - {}",
+                            project["name"], project["workflow_status"]["name"]
+                        ),
+                        project.clone(),
+                    )
+                })
+                .collect(),
+        );
+    }
+
+    pub fn load_releases(&mut self, project_id: String, aha: &Aha) {
+        let releases = aha.releases(project_id.clone());
+        self.write_history("project".to_string(), project_id);
+        self.releases = StatefulList::with_items(
+            releases
+                .iter()
+                .map(|project| (project["name"].to_string(), project.clone()))
+                .collect(),
+        );
+    }
+    pub fn write_history(&mut self, key: String, value: String) {
+        if self.history.is_none() {
+            self.history = Some(History {
+                project: None,
+                release: None,
+                feature: None,
+            });
+        }
+        match key.as_str() {
+            "project" => {
+                self.history.as_mut().unwrap().project = Some(value);
+            }
+            "release" => {
+                self.history.as_mut().unwrap().release = Some(value);
+            }
+            "feature" => {
+                self.history.as_mut().unwrap().feature = Some(value);
+            }
+            _ => {}
+        }
+
+        let clean_string = toml::to_string(&self.history.as_ref().unwrap()).unwrap();
+        let home_dir = dirs::home_dir().expect("Could not find home path");
+        let path_name = format!("{}/.aha_cli_cache", home_dir.display());
+        let path = Path::new(&path_name);
+        match File::create(&path) {
+            Err(why) => {
+                self.debug_txt = format!("couldn't create {}: {}", path_name, why);
+            }
+            Ok(mut file) => match file.write_all(clean_string.as_bytes()) {
+                Err(why) => {
+                    self.debug_txt = format!("couldn't write to {}: {}", path_name, why);
+                }
+                Ok(_) => {}
+            },
+        };
+    }
+
+    pub fn load_history(&mut self, file: String, aha: &Aha) {
+        let value: History = toml::from_str(&file).unwrap();
+        let return_value = value.clone();
+        if let Some(project) = value.project {
+            let project = project.to_string();
+            if let Some(index) = self.items.items.iter().position(|x| x.1["id"] == project) {
+                let project_id = self.items.items[index].1["id"]
+                    .as_str()
+                    .unwrap()
+                    .to_string();
+                self.items.state.select(Some(index));
+                self.load_releases(project_id, &aha);
+
+                self.active_layer = 1;
+                if let Some(release) = value.release {
+                    if let Some(index) = self
+                        .releases
+                        .items
+                        .iter()
+                        .position(|x| x.1["id"] == release)
+                    {
+                        let release_id = self.releases.items[index].1["id"]
+                            .as_str()
+                            .unwrap()
+                            .to_string();
+
+                        self.releases.state.select(Some(index));
+                        self.load_features(release_id, &aha);
+
+                        self.active_layer = 2;
+                    }
+
+                    if let Some(feature) = value.feature {
+                        if let Some(index) = self
+                            .features
+                            .items
+                            .iter()
+                            .position(|x| x.1["id"] == feature)
+                        {
+                            self.active_layer = 2;
+                            self.features.state.select(Some(index));
+                        }
+                    }
+                }
+            }
+        }
+
+        self.history = Some(return_value);
     }
     pub fn help_text(&mut self) {
         if self.active_layer != 3 {
@@ -283,24 +416,11 @@ impl<'a> App<'a> {
                         match self.releases.state.selected() {
                             Some(i) => {
                                 self.active_layer = 2;
-                                let project = self.releases.items[i].clone();
-                                let releases =
-                                    aha.features(project.1["id"].as_str().unwrap().to_string());
+                                let release = self.releases.items[i].clone();
 
-                                self.features = StatefulList::with_items(
-                                    releases
-                                        .iter()
-                                        .map(|project| {
-                                            (
-                                                format!(
-                                                    "{} - {}",
-                                                    project["name"],
-                                                    project["workflow_status"]["name"]
-                                                ),
-                                                project.clone(),
-                                            )
-                                        })
-                                        .collect(),
+                                self.load_features(
+                                    release.1["id"].as_str().unwrap().to_string(),
+                                    &aha,
                                 );
                             }
                             None => {}
@@ -311,16 +431,9 @@ impl<'a> App<'a> {
                             Some(i) => {
                                 self.active_layer = 1;
                                 let project = self.items.items[i].clone();
-                                let releases =
-                                    aha.releases(project.1["id"].as_str().unwrap().to_string());
-
-                                self.releases = StatefulList::with_items(
-                                    releases
-                                        .iter()
-                                        .map(|project| {
-                                            (project["name"].to_string(), project.clone())
-                                        })
-                                        .collect(),
+                                self.load_releases(
+                                    project.1["id"].as_str().unwrap().to_string(),
+                                    &aha,
                                 );
                             }
                             None => {}
