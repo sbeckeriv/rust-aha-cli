@@ -182,6 +182,7 @@ impl<'a> App<'a> {
                             .iter()
                             .position(|x| x.1["id"] == feature)
                         {
+                            // todo: need to format the selected feature and write the history
                             self.active_layer = 2;
                             self.features.state.select(Some(index));
                         }

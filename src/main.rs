@@ -2,8 +2,6 @@ mod app;
 #[allow(dead_code)]
 mod util;
 
-#[macro_use]
-extern crate debug_stub_derive;
 extern crate dirs;
 extern crate dotenv;
 extern crate envy;
@@ -18,18 +16,14 @@ extern crate serde;
 extern crate serde_json;
 #[macro_use]
 extern crate serde_derive;
-extern crate structopt;
-#[macro_use]
-extern crate prettytable;
-extern crate notify_rust;
 extern crate regex;
+extern crate structopt;
 use std::collections::HashMap;
 use std::fs;
 use std::fs::File;
 use std::io::prelude::*;
 use structopt::StructOpt;
 mod aha;
-mod github;
 
 use aha::Aha;
 use app::{App, Popup};
