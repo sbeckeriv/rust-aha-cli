@@ -6,6 +6,15 @@ uses configs from https://github.com/sbeckeriv/rust-workflow
 [![asciicast](https://asciinema.org/a/vsIzIXSAK3jmxS0IzrIs3ciBx.svg)](https://asciinema.org/a/vsIzIXSAK3jmxS0IzrIs3ciBx)
 
 
+## required env values
+i have this stored at ~/.env but it should work on the command line
+```
+WORKFLOW_EMAIL=<your email> # legacy will be going away
+AHA_DOMAIN=<your domain>
+AHA_TOKEN=<your token>
+```
+
+
 Fun things:
 
 i like the project list hides and shows but shows the selected item still
