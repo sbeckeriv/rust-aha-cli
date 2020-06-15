@@ -50,12 +50,6 @@ pub struct Opt {
     verbose: bool,
     #[structopt(short = "c", long = "config")]
     config_file: Option<String>,
-    #[structopt(short = "g", long = "generate")]
-    generate: bool,
-    #[structopt(short = "p", long = "prs")]
-    pr_status: bool,
-    #[structopt(long = "closed")]
-    closed: bool,
 }
 #[derive(Debug, Deserialize)]
 struct Config {
@@ -78,11 +72,8 @@ struct AhaConfig {
 
 #[derive(Deserialize, Debug)]
 struct Env {
-    github_api_token: String,
     aha_domain: String,
     aha_token: String,
-    workflow_repo: String,
-    workflow_login: String,
     workflow_email: String,
 }
 
