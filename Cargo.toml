@@ -7,6 +7,8 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+html2md = {version="*", git="https://github.com/sbeckeriv/html2md"}
+chrono ="*"
 scarlet = "*"
 tui = "0.9"
 termion = "1.5"
@@ -24,6 +26,7 @@ reqwest = "^0.9.0"
 structopt = "0.2.10"
 dotenv = "0.13.0"
 envy = "0.3.2"
-log = "0.4.3"
-env_logger = "0.5.10"
+slog = "*"
+slog-term = "*"
+slog-async = "*"
 text_io = "0.1"

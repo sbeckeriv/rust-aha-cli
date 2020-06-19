@@ -1,12 +1,19 @@
 use super::util::StatefulList;
 use super::Aha;
 
+use html2md;
 use scarlet::color::RGBColor;
 
 use super::util::event::Event;
 use serde_json::Value;
 
 use dirs;
+use slog;
+
+use slog::Drain;
+use std::fs::OpenOptions;
+
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::prelude::*;
 use std::path::Path;
@@ -32,12 +39,13 @@ pub enum Popup {
 }
 use super::aha::FeatureCreate;
 pub struct App<'a> {
+    pub logger: slog::Logger,
     pub items: StatefulList<(String, Value)>,
     pub releases: StatefulList<(String, Value)>,
     pub features: StatefulList<(String, Value)>,
     pub feature_text: Vec<String>,
     pub debug_txt: String,
-    pub feature_text_formatted: Vec<Text<'a>>,
+    pub feature_text_formatted: Option<Vec<Text<'a>>>,
     pub active_layer: i8,
     pub popup: Popup,
     pub text_box: String,
@@ -53,13 +61,27 @@ pub struct App<'a> {
 
 impl<'a> App<'a> {
     pub fn new() -> App<'a> {
-        let mut app = App {
+        let log_path = "/tmp/ahacli.log";
+        let file = OpenOptions::new()
+            .create(true)
+            .write(true)
+            .truncate(true)
+            .open(log_path)
+            .unwrap();
+
+        let decorator = slog_term::PlainDecorator::new(file);
+        let drain = slog_term::FullFormat::new(decorator).build().fuse();
+        let drain = slog_async::Async::new(drain).build().fuse();
+
+        let log = slog::Logger::root(drain, o!());
+        App {
+            logger: log,
             popup: Popup::None,
             items: StatefulList::with_items(vec![]),
             releases: StatefulList::with_items(vec![]),
             features: StatefulList::with_items(vec![]),
             feature_text: vec!["".to_string()],
-            feature_text_formatted: vec![],
+            feature_text_formatted: None,
             history: None,
             debug_txt: "".to_string(),
             active_layer: 0,
@@ -71,8 +93,7 @@ impl<'a> App<'a> {
             warning_style: Style::default().fg(Color::Yellow),
             error_style: Style::default().fg(Color::Magenta),
             critical_style: Style::default().fg(Color::Red),
-        };
-        app
+        }
     }
 
     pub fn load_features(&mut self, release_id: String, aha: &Aha) {
@@ -209,7 +230,7 @@ impl<'a> App<'a> {
                 base.push(Text::raw("\nRelease Actions:\n"));
                 base.push(Text::raw("c - create feature if release selected.\n"));
             }
-            self.feature_text_formatted = base;
+            self.feature_text_formatted = Some(base);
         }
     }
 
@@ -218,53 +239,85 @@ impl<'a> App<'a> {
         self.events.insert(0, event);
     }
 
-    pub fn format_selected_feature(&mut self) {
-        match self.features.state.selected() {
-            Some(i) => {
-                self.active_layer = 3;
-                let feature = self.features.items[i].clone();
-                self.feature_text = vec![feature.1.to_string()];
-                let rgb1 = RGBColor::from_hex_code(
-                    feature.1["workflow_status"]["color"].as_str().unwrap(),
-                )
-                .unwrap()
-                .int_rgb_tup();
-                self.debug_txt = format!("{:?}", rgb1);
-                self.feature_text_formatted = vec![
-                    Text::styled(
-                        feature.1["reference_num"].as_str().unwrap().to_string(),
-                        Style::default().modifier(Modifier::BOLD),
-                    ),
-                    Text::raw(" "),
-                    Text::raw(feature.1["name"].as_str().unwrap().to_string()),
-                    Text::raw(" ["),
-                    Text::styled(
-                        feature.1["workflow_status"]["name"]
+    pub fn format_selected_feature(
+        &mut self,
+        max_width: usize,
+    ) -> std::vec::Vec<tui::widgets::Text<'_>> {
+        if self.active_layer == 3 {
+            match self.features.state.selected() {
+                Some(i) => {
+                    if let Some(data) = self.feature_text_formatted.as_ref() {
+                        data.clone()
+                    } else {
+                        let feature = self.features.items[i].clone();
+                        self.feature_text = vec![feature.1.to_string()];
+                        let rgb1 = RGBColor::from_hex_code(
+                            feature.1["workflow_status"]["color"].as_str().unwrap(),
+                        )
+                        .unwrap()
+                        .int_rgb_tup();
+                        self.debug_txt = format!("{:?}", rgb1);
+
+                        let html = feature.1["description"]["body"]
                             .as_str()
                             .unwrap()
-                            .to_string(),
-                        Style::default().bg(Color::Rgb(rgb1.0 as u8, rgb1.1 as u8, rgb1.2 as u8)),
-                    ),
-                    Text::raw("]\n"),
-                    Text::raw(
-                        feature.1["assigned_to_user"]["name"]
-                            .as_str()
-                            .unwrap_or("Unassigned")
-                            .to_string(),
-                    ),
-                    Text::raw("\n"),
-                    Text::raw(feature.1["url"].as_str().unwrap().to_string()),
-                    Text::raw("\n"),
-                    Text::raw(
-                        feature.1["description"]["body"]
-                            .as_str()
-                            .unwrap()
-                            .to_string(),
-                    ),
-                ];
+                            .to_string();
+
+                        let markdown = html2md::parse_html_custom(
+                            &html,
+                            &HashMap::default(),
+                            html2md::Config {
+                                max_length: max_width - 9,
+                                new_line_break: "\n".to_string(),
+                                logger: None,
+                            },
+                        );
+                        let result = vec![
+                            Text::styled(
+                                feature.1["reference_num"].as_str().unwrap().to_string(),
+                                Style::default().modifier(Modifier::BOLD),
+                            ),
+                            Text::raw(" "),
+                            Text::raw(feature.1["name"].as_str().unwrap().to_string()),
+                            Text::raw(" ["),
+                            Text::styled(
+                                feature.1["workflow_status"]["name"]
+                                    .as_str()
+                                    .unwrap()
+                                    .to_string(),
+                                Style::default().bg(Color::Rgb(
+                                    rgb1.0 as u8,
+                                    rgb1.1 as u8,
+                                    rgb1.2 as u8,
+                                )),
+                            ),
+                            Text::raw("]\n"),
+                            Text::raw(
+                                feature.1["assigned_to_user"]["name"]
+                                    .as_str()
+                                    .unwrap_or("Unassigned")
+                                    .to_string(),
+                            ),
+                            Text::raw("\n"),
+                            Text::raw(feature.1["url"].as_str().unwrap().to_string()),
+                            Text::raw("\n"),
+                            Text::raw("\n"),
+                            Text::raw(markdown),
+                        ];
+                        self.feature_text_formatted = Some(result.clone());
+                        result
+                    }
+                }
+                None => vec![],
             }
-            None => {}
-        };
+        } else {
+            self.help_text();
+            if let Some(data) = self.feature_text_formatted.as_ref() {
+                data.clone()
+            } else {
+                vec![]
+            }
+        }
     }
 
     pub fn handle_search_popup(&mut self, event: Event<Key>, aha: &Aha) -> Option<()> {
@@ -387,6 +440,7 @@ impl<'a> App<'a> {
                     Some(())
                 }
                 Key::Left | Key::Char('h') => {
+                    self.feature_text_formatted = None;
                     self.debug_txt = format!("back");
                     if self.active_layer == 0 {}
                     if self.active_layer == 1 {
@@ -406,11 +460,11 @@ impl<'a> App<'a> {
                     Some(())
                 }
                 Key::Right | Key::Char('l') | Key::Char('\n') => {
+                    self.feature_text_formatted = None;
                     self.debug_txt = format!("over");
                     if self.active_layer == 2 {
                         if self.features.state.selected().is_some() {
                             self.active_layer = 3;
-                            self.format_selected_feature();
                         };
                     }
                     if self.active_layer == 1 {
@@ -444,6 +498,7 @@ impl<'a> App<'a> {
                     Some(())
                 }
                 Key::Down | Key::Char('j') => {
+                    self.feature_text_formatted = None;
                     self.debug_txt = format!("down");
                     if self.active_layer == 0 {
                         self.items.next();
@@ -457,12 +512,12 @@ impl<'a> App<'a> {
 
                     if self.active_layer == 3 {
                         self.features.next();
-                        self.format_selected_feature();
                     }
 
                     Some(())
                 }
                 Key::Up | Key::Char('k') => {
+                    self.feature_text_formatted = None;
                     self.debug_txt = format!("up");
                     if self.active_layer == 0 {
                         self.items.previous();
@@ -476,7 +531,6 @@ impl<'a> App<'a> {
 
                     if self.active_layer == 3 {
                         self.features.previous();
-                        self.format_selected_feature();
                     }
 
                     Some(())

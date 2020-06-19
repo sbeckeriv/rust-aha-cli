@@ -2,6 +2,9 @@ mod app;
 #[allow(dead_code)]
 mod util;
 
+extern crate chrono;
+extern crate html2md;
+
 extern crate dirs;
 extern crate dotenv;
 extern crate envy;
@@ -9,8 +12,6 @@ extern crate scarlet;
 extern crate termion;
 #[macro_use]
 extern crate failure;
-extern crate env_logger;
-extern crate log;
 extern crate reqwest;
 extern crate serde;
 extern crate serde_json;
@@ -18,6 +19,15 @@ extern crate serde_json;
 extern crate serde_derive;
 extern crate regex;
 extern crate structopt;
+
+#[macro_use]
+extern crate slog;
+extern crate slog_async;
+extern crate slog_term;
+
+use slog::Drain;
+use std::fs::OpenOptions;
+
 use std::collections::HashMap;
 use std::fs;
 use std::fs::File;
@@ -153,7 +163,6 @@ fn load_config() -> Result<(Env, Opt), Box<dyn Error>> {
     //dotenv::dotenv().ok();
     let my_path = format!("{}/.env", home_dir.display());
     dotenv::from_path(my_path).ok();
-    env_logger::init();
 
     let mut config: Env = envy::from_env()?;
 
@@ -290,10 +299,12 @@ fn main() -> Result<(), Box<dyn Error>> {
                 .highlight_style(style.fg(Color::Black).modifier(Modifier::BOLD))
                 .highlight_symbol(">");
             f.render_stateful_widget(feature_items, feature_chunks[0], &mut app.features.state);
-            let paragraph = Paragraph::new(app.feature_text_formatted.iter())
+            let feature_vec = app.format_selected_feature(feature_chunks[1].width as usize);
+            let paragraph = Paragraph::new(feature_vec.iter())
                 .block(Block::default().title("Feature").borders(Borders::ALL))
                 .wrap(true);
             f.render_widget(paragraph, feature_chunks[1]);
+
             let events_list = app
                 .events
                 .iter()
