@@ -262,12 +262,18 @@ impl<'a> App<'a> {
                             .as_str()
                             .unwrap()
                             .to_string();
+                        self.debug_txt = format!("{:?} - {} - {}", rgb1, max_width, max_width - 9);
+                        let width = if max_width % 2 == 0 {
+                            max_width - 8
+                        } else {
+                            max_width - 9
+                        };
 
                         let markdown = html2md::parse_html_custom(
                             &html,
                             &HashMap::default(),
                             html2md::Config {
-                                max_length: max_width - 9,
+                                max_length: width,
                                 new_line_break: "\n".to_string(),
                                 logger: None,
                             },
