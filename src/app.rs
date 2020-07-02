@@ -47,7 +47,7 @@ pub enum Popup {
     None,
     Search,
 }
-use super::aha::FeatureCreate;
+use super::aha::{FeatureCreate, RequirementCreate};
 pub struct App<'a> {
     pub logger: slog::Logger,
     pub items: StatefulList<(String, Value)>,
@@ -62,6 +62,7 @@ pub struct App<'a> {
     pub text_box: String,
     pub text_box_title: String,
     pub new_feature: FeatureCreate,
+    pub new_requirement: RequirementCreate,
     pub events: Vec<(&'a str, &'a str)>,
     pub info_style: Style,
     pub warning_style: Style,
@@ -98,6 +99,7 @@ impl<'a> App<'a> {
             feature_title: "".to_string(),
             active_layer: Screen::Project,
             new_feature: FeatureCreate::new(),
+            new_requirement: RequirementCreate::new(),
             text_box: "".to_string(),
             text_box_title: "Feature Name".to_string(),
             events: vec![("Event1", "INFO")],
@@ -433,47 +435,33 @@ impl<'a> App<'a> {
                     //hide
                     self.popup = Popup::None;
 
-                    self.new_feature = FeatureCreate::new();
-                    self.text_box_title = "Feature Name".to_string();
+                    self.new_requirement = RequirementCreate::new();
+                    self.text_box_title = "Requirement Name".to_string();
                 }
 
                 Key::Char('\n') => {
                     self.debug_txt = format!("enter");
-                    if let Some(title) = self.new_feature.advance(self.text_box.to_string()) {
+                    if let Some(title) = self.new_requirement.advance(self.text_box.to_string()) {
                         self.text_box_title = title.to_string();
 
                         self.text_box = "".to_string();
                     } else {
-                        self.debug_txt = format!("sending feature");
+                        self.debug_txt = format!("sending requirement");
                         self.popup = Popup::None;
                         self.text_box = "".to_string();
                         // send
                         let i = self.releases.state.selected().unwrap();
                         let project = self.releases.items[i].clone();
-                        self.new_feature.release_id = project.1["id"].as_str().unwrap().to_string();
-                        aha.send_feature(&self.new_feature);
+                        let i = self.features.state.selected().unwrap();
+                        let feature = self.features.items[i].clone();
+                        let feature_ref = feature.1["reference_num"].as_str().unwrap().to_string();
+                        aha.send_requirement(feature_ref, &self.new_requirement);
 
-                        let releases = aha.features(project.1["id"].as_str().unwrap().to_string());
+                        self.load_features(project.1["id"].as_str().unwrap().to_string(), &aha);
 
-                        self.features = StatefulList::with_items(
-                            releases
-                                .iter()
-                                .map(|project| {
-                                    (
-                                        format!(
-                                            "{} - {}",
-                                            project["name"].as_str().unwrap(),
-                                            project["workflow_status"]["name"].as_str().unwrap()
-                                        ),
-                                        project.clone(),
-                                    )
-                                })
-                                .collect(),
-                        );
-
-                        self.debug_txt = format!("feature created");
-                        self.new_feature = FeatureCreate::new();
-                        self.text_box_title = "Feature Name".to_string();
+                        self.debug_txt = format!("requirement created");
+                        self.new_requirement = RequirementCreate::new();
+                        self.text_box_title = "Requirement Name".to_string();
                     }
                 }
 
@@ -525,23 +513,7 @@ impl<'a> App<'a> {
                         self.new_feature.release_id = project.1["id"].as_str().unwrap().to_string();
                         aha.send_feature(&self.new_feature);
 
-                        let releases = aha.features(project.1["id"].as_str().unwrap().to_string());
-
-                        self.features = StatefulList::with_items(
-                            releases
-                                .iter()
-                                .map(|project| {
-                                    (
-                                        format!(
-                                            "{} - {}",
-                                            project["name"].as_str().unwrap(),
-                                            project["workflow_status"]["name"].as_str().unwrap()
-                                        ),
-                                        project.clone(),
-                                    )
-                                })
-                                .collect(),
-                        );
+                        self.load_features(project.1["id"].as_str().unwrap().to_string(), &aha);
 
                         self.debug_txt = format!("feature created");
                         self.new_feature = FeatureCreate::new();
@@ -586,6 +558,11 @@ impl<'a> App<'a> {
                 }
                 Key::Char('c') => {
                     self.debug_txt = format!("create");
+                    if self.active_layer == Screen::Feature {
+                        self.text_box_title = "Requirement Name".to_string();
+                    } else {
+                        self.text_box_title = "Feature Name".to_string();
+                    }
                     self.popup = Popup::Text;
                     Some(())
                 }
