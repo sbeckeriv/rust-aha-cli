@@ -25,9 +25,6 @@ extern crate slog;
 extern crate slog_async;
 extern crate slog_term;
 
-use slog::Drain;
-use std::fs::OpenOptions;
-
 use std::collections::HashMap;
 use std::fs;
 use std::fs::File;
@@ -235,7 +232,8 @@ fn main() -> Result<(), Box<dyn Error>> {
             app.help_text();
             let mut menu = 30;
             let mut main = 70;
-            if app.active_layer >= 2 {
+            if app.active_layer != app::Screen::Project && app.active_layer != app::Screen::Release
+            {
                 menu = 0;
                 main = 100;
             }
@@ -245,7 +243,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 .split(f.size());
             let mut project_size = 10;
             let mut release_size = 90;
-            if app.active_layer == 0 {
+            if app.active_layer == app::Screen::Project {
                 project_size = 90;
                 release_size = 10;
             }
@@ -277,7 +275,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             f.render_stateful_widget(releases_items, release_chunks[1], &mut app.releases.state);
             let mut feature_list = 10;
             let mut feature_show = 85;
-            if app.active_layer == 2 {
+            if app.active_layer == app::Screen::Features {
                 feature_list = 40;
                 feature_show = 55;
             }

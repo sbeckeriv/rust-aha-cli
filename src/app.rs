@@ -22,6 +22,16 @@ use tui::{
     style::{Color, Modifier, Style},
     widgets::Text,
 };
+#[derive(PartialEq, Deserialize, Serialize, Clone)]
+pub enum Screen {
+    Project,
+    Release,
+    Features,
+    Feature,
+    Requirement,
+    Creating,
+    Search,
+}
 
 // auto select the menus based on last view
 #[derive(Deserialize, Serialize, Clone)]
@@ -46,7 +56,7 @@ pub struct App<'a> {
     pub feature_text: Vec<String>,
     pub debug_txt: String,
     pub feature_text_formatted: Option<Vec<Text<'a>>>,
-    pub active_layer: i8,
+    pub active_layer: Screen,
     pub popup: Popup,
     pub text_box: String,
     pub text_box_title: String,
@@ -84,7 +94,7 @@ impl<'a> App<'a> {
             feature_text_formatted: None,
             history: None,
             debug_txt: "".to_string(),
-            active_layer: 0,
+            active_layer: Screen::Project,
             new_feature: FeatureCreate::new(),
             text_box: "".to_string(),
             text_box_title: "Feature Name".to_string(),
@@ -177,7 +187,7 @@ impl<'a> App<'a> {
                 self.items.state.select(Some(index));
                 self.load_releases(project_id, &aha);
 
-                self.active_layer = 1;
+                self.active_layer = Screen::Release;
                 if let Some(release) = value.release {
                     if let Some(index) = self
                         .releases
@@ -193,7 +203,7 @@ impl<'a> App<'a> {
                         self.releases.state.select(Some(index));
                         self.load_features(release_id, &aha);
 
-                        self.active_layer = 2;
+                        self.active_layer = Screen::Features;
                     }
 
                     if let Some(feature) = value.feature {
@@ -204,7 +214,7 @@ impl<'a> App<'a> {
                             .position(|x| x.1["id"] == feature)
                         {
                             // todo: need to format the selected feature and write the history
-                            self.active_layer = 2;
+                            self.active_layer = Screen::Features;
                             self.features.state.select(Some(index));
                         }
                     }
@@ -215,7 +225,7 @@ impl<'a> App<'a> {
         self.history = Some(return_value);
     }
     pub fn help_text(&mut self) {
-        if self.active_layer != 3 {
+        if self.active_layer != Screen::Feature {
             let mut base = vec![
                 Text::raw("Poor instructions\n"),
                 Text::raw("\n===================\n"),
@@ -226,7 +236,7 @@ impl<'a> App<'a> {
                 Text::raw("q - exit\n"),
                 Text::raw("esc - to close popups\n"),
             ];
-            if self.active_layer > 0 {
+            if self.active_layer != Screen::Project {
                 base.push(Text::raw("\nRelease Actions:\n"));
                 base.push(Text::raw("c - create feature if release selected.\n"));
             }
@@ -243,7 +253,7 @@ impl<'a> App<'a> {
         &mut self,
         max_width: usize,
     ) -> std::vec::Vec<tui::widgets::Text<'_>> {
-        if self.active_layer == 3 {
+        if self.active_layer == Screen::Feature {
             match self.features.state.selected() {
                 Some(i) => {
                     if let Some(data) = self.feature_text_formatted.as_ref() {
@@ -448,19 +458,19 @@ impl<'a> App<'a> {
                 Key::Left | Key::Char('h') => {
                     self.feature_text_formatted = None;
                     self.debug_txt = format!("back");
-                    if self.active_layer == 0 {}
-                    if self.active_layer == 1 {
+                    if self.active_layer == Screen::Project {}
+                    if self.active_layer == Screen::Release {
                         self.releases.unselect();
-                        self.active_layer = 0;
+                        self.active_layer = Screen::Project;
                     }
 
-                    if self.active_layer == 2 {
+                    if self.active_layer == Screen::Features {
                         self.features.unselect();
-                        self.active_layer = 1;
+                        self.active_layer = Screen::Release;
                     }
 
-                    if self.active_layer == 3 {
-                        self.active_layer = 2;
+                    if self.active_layer == Screen::Feature {
+                        self.active_layer = Screen::Features;
                     }
 
                     Some(())
@@ -468,15 +478,15 @@ impl<'a> App<'a> {
                 Key::Right | Key::Char('l') | Key::Char('\n') => {
                     self.feature_text_formatted = None;
                     self.debug_txt = format!("over");
-                    if self.active_layer == 2 {
+                    if self.active_layer == Screen::Features {
                         if self.features.state.selected().is_some() {
-                            self.active_layer = 3;
+                            self.active_layer = Screen::Feature;
                         };
                     }
-                    if self.active_layer == 1 {
+                    if self.active_layer == Screen::Release {
                         match self.releases.state.selected() {
                             Some(i) => {
-                                self.active_layer = 2;
+                                self.active_layer = Screen::Features;
                                 let release = self.releases.items[i].clone();
 
                                 self.load_features(
@@ -487,10 +497,10 @@ impl<'a> App<'a> {
                             None => {}
                         };
                     }
-                    if self.active_layer == 0 {
+                    if self.active_layer == Screen::Project {
                         match self.items.state.selected() {
                             Some(i) => {
-                                self.active_layer = 1;
+                                self.active_layer = Screen::Release;
                                 let project = self.items.items[i].clone();
                                 self.load_releases(
                                     project.1["id"].as_str().unwrap().to_string(),
@@ -506,18 +516,12 @@ impl<'a> App<'a> {
                 Key::Down | Key::Char('j') => {
                     self.feature_text_formatted = None;
                     self.debug_txt = format!("down");
-                    if self.active_layer == 0 {
-                        self.items.next();
-                    }
-                    if self.active_layer == 1 {
-                        self.releases.next();
-                    }
-                    if self.active_layer == 2 {
-                        self.features.next();
-                    }
-
-                    if self.active_layer == 3 {
-                        self.features.next();
+                    match self.active_layer {
+                        Screen::Project => self.items.next(),
+                        Screen::Release => self.releases.next(),
+                        Screen::Features => self.features.next(),
+                        Screen::Feature => self.features.next(),
+                        _ => {}
                     }
 
                     Some(())
@@ -525,18 +529,12 @@ impl<'a> App<'a> {
                 Key::Up | Key::Char('k') => {
                     self.feature_text_formatted = None;
                     self.debug_txt = format!("up");
-                    if self.active_layer == 0 {
-                        self.items.previous();
-                    }
-                    if self.active_layer == 1 {
-                        self.releases.previous();
-                    }
-                    if self.active_layer == 2 {
-                        self.features.previous();
-                    }
-
-                    if self.active_layer == 3 {
-                        self.features.previous();
+                    match self.active_layer {
+                        Screen::Project => self.items.previous(),
+                        Screen::Release => self.releases.previous(),
+                        Screen::Features => self.features.previous(),
+                        Screen::Feature => self.features.previous(),
+                        _ => {}
                     }
 
                     Some(())
