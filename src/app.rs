@@ -267,7 +267,10 @@ impl<'a> App<'a> {
             ];
             if self.active_layer != Screen::Project {
                 base.push(Text::raw("\nRelease Actions:\n"));
-                base.push(Text::raw("c - create feature if release selected.\n"));
+                base.push(Text::raw("c - create feature if a release is selected.\n"));
+                base.push(Text::raw(
+                    "c - create requirement if a feature is selected.\n",
+                ));
             }
             self.feature_text_formatted = Some(base);
         }
