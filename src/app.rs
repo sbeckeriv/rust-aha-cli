@@ -54,6 +54,7 @@ pub struct App<'a> {
     pub releases: StatefulList<(String, Value)>,
     pub features: StatefulList<(String, Value)>,
     pub feature_text: Vec<String>,
+    pub feature_title: String,
     pub debug_txt: String,
     pub feature_text_formatted: Option<Vec<Text<'a>>>,
     pub active_layer: Screen,
@@ -94,6 +95,7 @@ impl<'a> App<'a> {
             feature_text_formatted: None,
             history: None,
             debug_txt: "".to_string(),
+            feature_title: "".to_string(),
             active_layer: Screen::Project,
             new_feature: FeatureCreate::new(),
             text_box: "".to_string(),
@@ -114,14 +116,34 @@ impl<'a> App<'a> {
             feature_list
                 .iter()
                 .map(|project| {
-                    (
+                    let mut vec = vec![];
+
+                    vec.push((
                         format!(
                             "{} - {}",
-                            project["name"], project["workflow_status"]["name"]
+                            project["name"].as_str().unwrap(),
+                            project["workflow_status"]["name"].as_str().unwrap(),
                         ),
                         project.clone(),
-                    )
+                    ));
+                    if let Some(reqs) = project["requirements"].as_array() {
+                        let last = reqs.len();
+                        for (i, req) in reqs.iter().enumerate() {
+                            let brace = if i == last - 1 { "└" } else { "├" };
+                            vec.push((
+                                format!(
+                                    "{} {} - {}",
+                                    brace,
+                                    req["name"].as_str().unwrap(),
+                                    req["workflow_status"]["name"].as_str().unwrap(),
+                                ),
+                                project.clone(),
+                            ))
+                        }
+                    }
+                    vec
                 })
+                .flatten()
                 .collect(),
         );
     }
@@ -132,7 +154,12 @@ impl<'a> App<'a> {
         self.releases = StatefulList::with_items(
             releases
                 .iter()
-                .map(|project| (project["name"].to_string(), project.clone()))
+                .map(|project| {
+                    (
+                        project["name"].as_str().unwrap().to_string(),
+                        project.clone(),
+                    )
+                })
                 .collect(),
         );
     }
@@ -260,19 +287,57 @@ impl<'a> App<'a> {
                         data.clone()
                     } else {
                         let feature = self.features.items[i].clone();
-                        self.feature_text = vec![feature.1.to_string()];
+                        let selected_feature = if feature.0.starts_with("└")
+                            || feature.0.starts_with("├")
+                        {
+                            let clean_string = feature
+                                .0
+                                .splitn(2, " ")
+                                .collect::<Vec<_>>()
+                                .last()
+                                .unwrap()
+                                .to_string();
+                            let requirement = feature.1["requirements"]
+                                .as_array()
+                                .unwrap()
+                                .iter()
+                                .find({
+                                    |req| {
+                                        clean_string
+                                            == format!(
+                                                "{} - {}",
+                                                req["name"].as_str().unwrap(),
+                                                req["workflow_status"]["name"].as_str().unwrap(),
+                                            )
+                                    }
+                                })
+                                .unwrap_or(&feature.1)
+                                .clone();
+                            self.feature_title = format!(
+                                "Requirement {}",
+                                requirement["reference_num"].as_str().unwrap()
+                            );
+                            requirement
+                        } else {
+                            self.feature_title =
+                                format!("Feature {}", feature.1["reference_num"].as_str().unwrap());
+                            feature.1.clone()
+                        };
+                        self.feature_text = vec![selected_feature.to_string()];
                         let rgb1 = RGBColor::from_hex_code(
-                            feature.1["workflow_status"]["color"].as_str().unwrap(),
+                            selected_feature["workflow_status"]["color"]
+                                .as_str()
+                                .unwrap(),
                         )
                         .unwrap()
                         .int_rgb_tup();
-                        self.debug_txt = format!("{:?}", rgb1);
+                        //self.debug_txt = format!("{:?}", rgb1);
 
-                        let html = feature.1["description"]["body"]
+                        let html = selected_feature["description"]["body"]
                             .as_str()
                             .unwrap()
                             .to_string();
-                        self.debug_txt = format!("{:?} - {} - {}", rgb1, max_width, max_width - 9);
+                        //self.debug_txt = format!("{:?} - {} - {}", rgb1, max_width, max_width - 9);
                         let width = if max_width % 2 == 0 {
                             max_width - 8
                         } else {
@@ -289,15 +354,10 @@ impl<'a> App<'a> {
                             },
                         );
                         let result = vec![
-                            Text::styled(
-                                feature.1["reference_num"].as_str().unwrap().to_string(),
-                                Style::default().modifier(Modifier::BOLD),
-                            ),
-                            Text::raw(" "),
-                            Text::raw(feature.1["name"].as_str().unwrap().to_string()),
+                            Text::raw(selected_feature["name"].as_str().unwrap().to_string()),
                             Text::raw(" ["),
                             Text::styled(
-                                feature.1["workflow_status"]["name"]
+                                selected_feature["workflow_status"]["name"]
                                     .as_str()
                                     .unwrap()
                                     .to_string(),
@@ -309,13 +369,13 @@ impl<'a> App<'a> {
                             ),
                             Text::raw("]\n"),
                             Text::raw(
-                                feature.1["assigned_to_user"]["name"]
+                                selected_feature["assigned_to_user"]["name"]
                                     .as_str()
                                     .unwrap_or("Unassigned")
                                     .to_string(),
                             ),
                             Text::raw("\n"),
-                            Text::raw(feature.1["url"].as_str().unwrap().to_string()),
+                            Text::raw(selected_feature["url"].as_str().unwrap().to_string()),
                             Text::raw("\n"),
                             Text::raw("\n"),
                             Text::raw(markdown),
@@ -365,6 +425,79 @@ impl<'a> App<'a> {
         //dont break from here
         Some(())
     }
+
+    pub fn handle_create_requirement_popup(&mut self, event: Event<Key>, aha: &Aha) -> Option<()> {
+        match event {
+            Event::Input(input) => match input {
+                Key::Esc => {
+                    //hide
+                    self.popup = Popup::None;
+
+                    self.new_feature = FeatureCreate::new();
+                    self.text_box_title = "Feature Name".to_string();
+                }
+
+                Key::Char('\n') => {
+                    self.debug_txt = format!("enter");
+                    if let Some(title) = self.new_feature.advance(self.text_box.to_string()) {
+                        self.text_box_title = title.to_string();
+
+                        self.text_box = "".to_string();
+                    } else {
+                        self.debug_txt = format!("sending feature");
+                        self.popup = Popup::None;
+                        self.text_box = "".to_string();
+                        // send
+                        let i = self.releases.state.selected().unwrap();
+                        let project = self.releases.items[i].clone();
+                        self.new_feature.release_id = project.1["id"].as_str().unwrap().to_string();
+                        aha.send_feature(&self.new_feature);
+
+                        let releases = aha.features(project.1["id"].as_str().unwrap().to_string());
+
+                        self.features = StatefulList::with_items(
+                            releases
+                                .iter()
+                                .map(|project| {
+                                    (
+                                        format!(
+                                            "{} - {}",
+                                            project["name"].as_str().unwrap(),
+                                            project["workflow_status"]["name"].as_str().unwrap()
+                                        ),
+                                        project.clone(),
+                                    )
+                                })
+                                .collect(),
+                        );
+
+                        self.debug_txt = format!("feature created");
+                        self.new_feature = FeatureCreate::new();
+                        self.text_box_title = "Feature Name".to_string();
+                    }
+                }
+
+                Key::Char(c) => {
+                    self.debug_txt = format!("char {}", c);
+                    self.text_box.push(c);
+                }
+
+                Key::Backspace => {
+                    self.debug_txt = format!("backspace");
+                    self.text_box.pop();
+                }
+                _ => {
+                    self.debug_txt = format!("no opt");
+                    //no opt for arrow keys
+                }
+            },
+            Event::Tick => {
+                self.advance();
+            }
+        }
+        //dont break from here
+        Some(())
+    }
     pub fn handle_create_popup(&mut self, event: Event<Key>, aha: &Aha) -> Option<()> {
         match event {
             Event::Input(input) => match input {
@@ -401,7 +534,8 @@ impl<'a> App<'a> {
                                     (
                                         format!(
                                             "{} - {}",
-                                            project["name"], project["workflow_status"]["name"]
+                                            project["name"].as_str().unwrap(),
+                                            project["workflow_status"]["name"].as_str().unwrap()
                                         ),
                                         project.clone(),
                                     )

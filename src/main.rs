@@ -297,9 +297,10 @@ fn main() -> Result<(), Box<dyn Error>> {
                 .highlight_style(style.fg(Color::Black).modifier(Modifier::BOLD))
                 .highlight_symbol(">");
             f.render_stateful_widget(feature_items, feature_chunks[0], &mut app.features.state);
+            let title = app.feature_title.clone();
             let feature_vec = app.format_selected_feature(feature_chunks[1].width as usize);
             let paragraph = Paragraph::new(feature_vec.iter())
-                .block(Block::default().title("Feature").borders(Borders::ALL))
+                .block(Block::default().title(&title).borders(Borders::ALL))
                 .wrap(true);
             f.render_widget(paragraph, feature_chunks[1]);
 
@@ -340,7 +341,11 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         if let Ok(event) = events.next() {
             let result = if app.popup == Popup::Text && app.releases.state.selected().is_some() {
-                let x = app.handle_create_popup(event, &aha);
+                let x = if app.active_layer == app::Screen::Feature {
+                    app.handle_create_requirement_popup(event, &aha)
+                } else {
+                    app.handle_create_popup(event, &aha)
+                };
                 events.disable_exit_key();
                 x
             } else if app.popup == Popup::Search {
