@@ -316,19 +316,35 @@ impl<'a> App<'a> {
             let mut base = vec![
                 Text::raw("Poor instructions\n"),
                 Text::raw("\n===================\n"),
-                Text::raw("j ↑ - up a list\n"),
-                Text::raw("k ↓ - down a list down\n"),
-                Text::raw("l → enter - enter selected item\n"),
-                Text::raw("h ← - previous section\n"),
-                Text::raw("q - exit\n"),
-                Text::raw("esc - to close popups\n"),
+                Text::raw(format!(
+                    "{:?} {:?} - up a list\n",
+                    self.layout.up, self.layout.up_arrow
+                )),
+                Text::raw(format!(
+                    "{:?} {:?} - down a list down\n",
+                    self.layout.down, self.layout.down_arrow
+                )),
+                Text::raw(format!(
+                    "{:?} {:?} {:?} enter - enter selected item\n",
+                    self.layout.right, self.layout.right_arrow, self.layout.right_alt
+                )),
+                Text::raw(format!(
+                    "{:?} {:?} - previous section\n",
+                    self.layout.left, self.layout.left_arrow
+                )),
+                Text::raw(format!("{:?} - exit\n", self.layout.quit)),
+                Text::raw(format!("{:?} - to close popups\n", self.layout.escape)),
             ];
             if self.active_layer != Screen::Project {
                 base.push(Text::raw("\nRelease Actions:\n"));
-                base.push(Text::raw("c - create feature if a release is selected.\n"));
-                base.push(Text::raw(
-                    "c - create requirement if a feature is selected.\n",
-                ));
+                base.push(Text::raw(format!(
+                    "{:?} - create feature if a release is selected.\n",
+                    self.layout.create
+                )));
+                base.push(Text::raw(format!(
+                    "{:?} - create requirement if a feature is selected.\n",
+                    self.layout.create
+                )));
             }
             self.feature_text_formatted = Some(base);
         }
