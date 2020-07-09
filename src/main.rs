@@ -1,4 +1,5 @@
 mod app;
+mod key_layout;
 #[allow(dead_code)]
 mod util;
 
@@ -225,6 +226,23 @@ fn main() -> Result<(), Box<dyn Error>> {
                 Ok(_) => (),
             }
             app.load_history(s, &aha);
+        }
+    };
+
+    let path_name = format!("{}/.aha_cli_layout.toml", home_dir.display());
+    match File::open(&path_name) {
+        Err(why) => {
+            if opt.verbose {
+                println!("couldn't open {}: {}", path_name, why.to_string());
+            }
+        }
+        Ok(mut file) => {
+            let mut s = String::new();
+            match file.read_to_string(&mut s) {
+                Err(why) => panic!("couldn't read {}: {}", path_name, why),
+                Ok(_) => (),
+            }
+            app.load_layout(s);
         }
     };
     loop {

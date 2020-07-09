@@ -1,3 +1,4 @@
+use super::key_layout::KeyLayout;
 use super::util::StatefulList;
 use super::Aha;
 
@@ -41,6 +42,24 @@ pub struct History {
     pub feature: Option<String>,
 }
 
+// auto select the menus based on last view
+#[derive(Deserialize, Serialize, Clone)]
+pub struct Layout {
+    pub up: Option<String>,
+    pub down: Option<String>,
+    pub left: Option<String>,
+    pub right: Option<String>,
+    pub up_arrow: Option<String>,
+    pub down_arrow: Option<String>,
+    pub left_arrow: Option<String>,
+    pub right_arrow: Option<String>,
+    pub right_alt: Option<String>,
+    pub escape: Option<String>,
+    pub quit: Option<String>,
+    pub search: Option<String>,
+    pub create: Option<String>,
+}
+
 #[derive(PartialEq)]
 pub enum Popup {
     Text,
@@ -49,6 +68,7 @@ pub enum Popup {
 }
 use super::aha::{FeatureCreate, RequirementCreate};
 pub struct App<'a> {
+    pub layout: KeyLayout,
     pub logger: slog::Logger,
     pub items: StatefulList<(String, Value)>,
     pub releases: StatefulList<(String, Value)>,
@@ -87,6 +107,7 @@ impl<'a> App<'a> {
 
         let log = slog::Logger::root(drain, o!());
         App {
+            layout: KeyLayout::default(),
             logger: log,
             popup: Popup::None,
             items: StatefulList::with_items(vec![]),
@@ -201,6 +222,43 @@ impl<'a> App<'a> {
                 Ok(_) => {}
             },
         };
+    }
+
+    fn get_key_from(&self, input: &str) -> Key {
+        if input.len() == 1 {
+            Key::Char(input.as_bytes()[0] as char)
+        } else if input == "up" {
+            Key::Up
+        } else if input == "down" {
+            Key::Down
+        } else if input == "left" {
+            Key::Left
+        } else if input == "right" {
+            Key::Right
+        } else if input == "esc" {
+            Key::Esc
+        } else if input == "none" {
+            Key::Null
+        } else if input == "\n" {
+            Key::Char('\n')
+        } else if input.starts_with("alt+") {
+            let text = input.splitn(2, "+").collect::<Vec<_>>();
+            let text = text.last().unwrap();
+            Key::Alt(text.as_bytes()[0] as char)
+        } else if input.starts_with("ctrl+") {
+            let text = input.splitn(2, "+").collect::<Vec<_>>();
+            let text = text.last().unwrap();
+            Key::Ctrl(text.as_bytes()[0] as char)
+        } else {
+            Key::Null
+        }
+    }
+
+    pub fn load_layout(&mut self, file: String) {
+        let value: Layout = toml::from_str(&file).unwrap();
+        if let Some(x) = value.up {
+            self.layout.up = self.get_key_from(&x);
+        }
     }
 
     pub fn load_history(&mut self, file: String, aha: &Aha) {
@@ -403,26 +461,17 @@ impl<'a> App<'a> {
 
     pub fn handle_search_popup(&mut self, event: Event<Key>, aha: &Aha) -> Option<()> {
         match event {
-            Event::Input(input) => match input {
-                Key::Esc => {
+            Event::Input(input) => {
+                if input == self.layout.escape {
                     //hide
                     self.popup = Popup::None;
-                }
-
-                Key::Char('\n') => {}
-
-                Key::Char(c) => {
+                } else if input == Key::Char('\n') {
+                } else if input == Key::Backspace {
+                    self.text_box.pop();
+                } else if let Key::Char(c) = input {
                     self.text_box.push(c);
                 }
-
-                Key::Backspace => {
-                    self.text_box.pop();
-                }
-                _ => {
-
-                    //no opt for arrow keys
-                }
-            },
+            }
             Event::Tick => {
                 self.advance();
             }
@@ -433,16 +482,12 @@ impl<'a> App<'a> {
 
     pub fn handle_create_requirement_popup(&mut self, event: Event<Key>, aha: &Aha) -> Option<()> {
         match event {
-            Event::Input(input) => match input {
-                Key::Esc => {
-                    //hide
+            Event::Input(input) => {
+                if input == self.layout.escape {
                     self.popup = Popup::None;
-
                     self.new_requirement = RequirementCreate::new();
                     self.text_box_title = "Requirement Name".to_string();
-                }
-
-                Key::Char('\n') => {
+                } else if input == Key::Char('\n') {
                     self.debug_txt = format!("enter");
                     if let Some(title) = self.new_requirement.advance(self.text_box.to_string()) {
                         self.text_box_title = title.to_string();
@@ -466,22 +511,13 @@ impl<'a> App<'a> {
                         self.new_requirement = RequirementCreate::new();
                         self.text_box_title = "Requirement Name".to_string();
                     }
-                }
-
-                Key::Char(c) => {
+                } else if input == Key::Backspace {
+                    self.text_box.pop();
+                } else if let Key::Char(c) = input {
                     self.debug_txt = format!("char {}", c);
                     self.text_box.push(c);
                 }
-
-                Key::Backspace => {
-                    self.debug_txt = format!("backspace");
-                    self.text_box.pop();
-                }
-                _ => {
-                    self.debug_txt = format!("no opt");
-                    //no opt for arrow keys
-                }
-            },
+            }
             Event::Tick => {
                 self.advance();
             }
@@ -491,16 +527,12 @@ impl<'a> App<'a> {
     }
     pub fn handle_create_popup(&mut self, event: Event<Key>, aha: &Aha) -> Option<()> {
         match event {
-            Event::Input(input) => match input {
-                Key::Esc => {
-                    //hide
+            Event::Input(input) => {
+                if input == self.layout.escape {
                     self.popup = Popup::None;
-
                     self.new_feature = FeatureCreate::new();
                     self.text_box_title = "Feature Name".to_string();
-                }
-
-                Key::Char('\n') => {
+                } else if input == Key::Char('\n') {
                     self.debug_txt = format!("enter");
                     if let Some(title) = self.new_feature.advance(self.text_box.to_string()) {
                         self.text_box_title = title.to_string();
@@ -522,22 +554,14 @@ impl<'a> App<'a> {
                         self.new_feature = FeatureCreate::new();
                         self.text_box_title = "Feature Name".to_string();
                     }
-                }
-
-                Key::Char(c) => {
+                } else if input == Key::Backspace {
+                    self.text_box.pop();
+                } else if let Key::Char(c) = input {
                     self.debug_txt = format!("char {}", c);
                     self.text_box.push(c);
                 }
+            }
 
-                Key::Backspace => {
-                    self.debug_txt = format!("backspace");
-                    self.text_box.pop();
-                }
-                _ => {
-                    self.debug_txt = format!("no opt");
-                    //no opt for arrow keys
-                }
-            },
             Event::Tick => {
                 self.advance();
             }
@@ -548,18 +572,15 @@ impl<'a> App<'a> {
 
     pub fn handle_nav(&mut self, event: Event<Key>, aha: &Aha) -> Option<()> {
         match event {
-            Event::Input(input) => match input {
-                Key::Char('q') => {
+            Event::Input(input) => {
+                if input == self.layout.quit {
                     self.debug_txt = format!("q exit");
                     None
-                }
-
-                Key::Char('s') => {
+                } else if input == self.layout.search {
                     self.debug_txt = format!("search");
                     self.popup = Popup::Search;
                     Some(())
-                }
-                Key::Char('c') => {
+                } else if input == self.layout.create {
                     self.debug_txt = format!("create");
                     if self.active_layer == Screen::Feature {
                         self.text_box_title = "Requirement Name".to_string();
@@ -568,8 +589,7 @@ impl<'a> App<'a> {
                     }
                     self.popup = Popup::Text;
                     Some(())
-                }
-                Key::Left | Key::Char('h') => {
+                } else if input == self.layout.left || input == self.layout.left_arrow {
                     self.feature_text_formatted = None;
                     self.debug_txt = format!("back");
                     if self.active_layer == Screen::Project {}
@@ -588,8 +608,10 @@ impl<'a> App<'a> {
                     }
 
                     Some(())
-                }
-                Key::Right | Key::Char('l') | Key::Char('\n') => {
+                } else if input == self.layout.right
+                    || input == self.layout.right_arrow
+                    || input == self.layout.right_alt
+                {
                     self.feature_text_formatted = None;
                     self.debug_txt = format!("over");
                     if self.active_layer == Screen::Features {
@@ -626,8 +648,7 @@ impl<'a> App<'a> {
                     }
 
                     Some(())
-                }
-                Key::Down | Key::Char('j') => {
+                } else if input == self.layout.down || input == self.layout.down_arrow {
                     self.feature_text_formatted = None;
                     self.debug_txt = format!("down");
                     match self.active_layer {
@@ -639,8 +660,7 @@ impl<'a> App<'a> {
                     }
 
                     Some(())
-                }
-                Key::Up | Key::Char('k') => {
+                } else if input == self.layout.up || input == self.layout.up_arrow {
                     self.feature_text_formatted = None;
                     self.debug_txt = format!("up");
                     match self.active_layer {
@@ -652,12 +672,12 @@ impl<'a> App<'a> {
                     }
 
                     Some(())
-                }
-                _ => {
+                } else {
                     self.debug_txt = format!("{:?}", input);
                     Some(())
                 }
-            },
+            }
+
             Event::Tick => {
                 self.advance();
                 Some(())
