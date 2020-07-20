@@ -124,6 +124,9 @@ pub struct StatefulList<T> {
 }
 
 impl<T> StatefulList<T> {
+    pub fn len(&self) -> usize {
+        self.items.len()
+    }
     pub fn new() -> StatefulList<T> {
         StatefulList {
             state: ListState::default(),

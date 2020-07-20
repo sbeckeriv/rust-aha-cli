@@ -58,7 +58,9 @@ impl<'a> Aha<'a> {
 
     pub fn projects(&self) -> Vec<Value> {
         let projects_url = self.url_builder().join("products?per_page=200").unwrap();
-        let projects = self.get(projects_url, "products".to_string()).unwrap();
+        let projects = self
+            .get(projects_url, "products".to_string())
+            .expect("Can not load projects. Check your domain and api keys");
         projects.as_array().unwrap().to_vec()
     }
     pub fn releases(&self, project_id: String) -> Vec<Value> {
@@ -70,7 +72,9 @@ impl<'a> Aha<'a> {
             .unwrap()
             .join("releases?exclude_shipped=true&per_page=200")
             .unwrap();
-        let releases = self.get(releases_url, "releases".to_string()).unwrap();
+        let releases = self
+            .get(releases_url, "releases".to_string())
+            .expect("Can not load release. Check your access in Aha!");
         releases.as_array().unwrap().to_vec()
     }
 
@@ -83,7 +87,9 @@ impl<'a> Aha<'a> {
             .unwrap()
             .join("features?per_page=200&fields=*")
             .unwrap();
-        let releases = self.get(releases_url, "features".to_string()).unwrap();
+        let releases = self
+            .get(releases_url, "features".to_string())
+            .expect("Can not load features. Check your access in Aha!");
         releases.as_array().unwrap().to_vec()
     }
     pub fn send_feature(&self, feature: &FeatureCreate) {

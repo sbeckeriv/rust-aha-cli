@@ -169,6 +169,12 @@ impl<'a> App<'a> {
                 .flatten()
                 .collect(),
         );
+        if self.features.len() == 0 {
+            self.features = StatefulList::with_items(vec![(
+                format!("No features loaded"),
+                serde_json::Value::Null,
+            )]);
+        }
     }
 
     pub fn load_releases(&mut self, project_id: String, aha: &Aha) {
@@ -366,101 +372,108 @@ impl<'a> App<'a> {
                         data.clone()
                     } else {
                         let feature = self.features.items[i].clone();
-                        let selected_feature = if feature.0.starts_with("└")
-                            || feature.0.starts_with("├")
-                        {
-                            let clean_string = feature
-                                .0
-                                .splitn(2, " ")
-                                .collect::<Vec<_>>()
-                                .last()
+                        if !feature.1.is_null() {
+                            let selected_feature =
+                                if feature.0.starts_with("└") || feature.0.starts_with("├") {
+                                    let clean_string = feature
+                                        .0
+                                        .splitn(2, " ")
+                                        .collect::<Vec<_>>()
+                                        .last()
+                                        .unwrap()
+                                        .to_string();
+                                    let requirement = feature.1["requirements"]
+                                        .as_array()
+                                        .unwrap()
+                                        .iter()
+                                        .find({
+                                            |req| {
+                                                clean_string
+                                                    == format!(
+                                                        "{} - {}",
+                                                        req["name"].as_str().unwrap(),
+                                                        req["workflow_status"]["name"]
+                                                            .as_str()
+                                                            .unwrap(),
+                                                    )
+                                            }
+                                        })
+                                        .unwrap_or(&feature.1)
+                                        .clone();
+                                    self.feature_title = format!(
+                                        "Requirement {}",
+                                        requirement["reference_num"].as_str().unwrap()
+                                    );
+                                    requirement
+                                } else {
+                                    self.feature_title = format!(
+                                        "Feature {}",
+                                        feature.1["reference_num"].as_str().unwrap()
+                                    );
+                                    feature.1.clone()
+                                };
+                            self.feature_text = vec![selected_feature.to_string()];
+                            let rgb1 = RGBColor::from_hex_code(
+                                selected_feature["workflow_status"]["color"]
+                                    .as_str()
+                                    .unwrap(),
+                            )
+                            .unwrap()
+                            .int_rgb_tup();
+                            //self.debug_txt = format!("{:?}", rgb1);
+
+                            let html = selected_feature["description"]["body"]
+                                .as_str()
                                 .unwrap()
                                 .to_string();
-                            let requirement = feature.1["requirements"]
-                                .as_array()
-                                .unwrap()
-                                .iter()
-                                .find({
-                                    |req| {
-                                        clean_string
-                                            == format!(
-                                                "{} - {}",
-                                                req["name"].as_str().unwrap(),
-                                                req["workflow_status"]["name"].as_str().unwrap(),
-                                            )
-                                    }
-                                })
-                                .unwrap_or(&feature.1)
-                                .clone();
-                            self.feature_title = format!(
-                                "Requirement {}",
-                                requirement["reference_num"].as_str().unwrap()
+                            //self.debug_txt = format!("{:?} - {} - {}", rgb1, max_width, max_width - 9);
+                            let width = if max_width % 2 == 0 {
+                                max_width - 8
+                            } else {
+                                max_width - 9
+                            };
+
+                            let markdown = html2md::parse_html_custom(
+                                &html,
+                                &HashMap::default(),
+                                html2md::Config {
+                                    max_length: width,
+                                    new_line_break: "\n".to_string(),
+                                    logger: None,
+                                },
                             );
-                            requirement
+                            let result = vec![
+                                Text::raw(selected_feature["name"].as_str().unwrap().to_string()),
+                                Text::raw(" ["),
+                                Text::styled(
+                                    selected_feature["workflow_status"]["name"]
+                                        .as_str()
+                                        .unwrap()
+                                        .to_string(),
+                                    Style::default().bg(Color::Rgb(
+                                        rgb1.0 as u8,
+                                        rgb1.1 as u8,
+                                        rgb1.2 as u8,
+                                    )),
+                                ),
+                                Text::raw("]\n"),
+                                Text::raw(
+                                    selected_feature["assigned_to_user"]["name"]
+                                        .as_str()
+                                        .unwrap_or("Unassigned")
+                                        .to_string(),
+                                ),
+                                Text::raw("\n"),
+                                Text::raw(selected_feature["url"].as_str().unwrap().to_string()),
+                                Text::raw("\n"),
+                                Text::raw("\n"),
+                                Text::raw(markdown),
+                            ];
+                            self.feature_text_formatted = Some(result.clone());
+                            result
                         } else {
-                            self.feature_title =
-                                format!("Feature {}", feature.1["reference_num"].as_str().unwrap());
-                            feature.1.clone()
-                        };
-                        self.feature_text = vec![selected_feature.to_string()];
-                        let rgb1 = RGBColor::from_hex_code(
-                            selected_feature["workflow_status"]["color"]
-                                .as_str()
-                                .unwrap(),
-                        )
-                        .unwrap()
-                        .int_rgb_tup();
-                        //self.debug_txt = format!("{:?}", rgb1);
-
-                        let html = selected_feature["description"]["body"]
-                            .as_str()
-                            .unwrap()
-                            .to_string();
-                        //self.debug_txt = format!("{:?} - {} - {}", rgb1, max_width, max_width - 9);
-                        let width = if max_width % 2 == 0 {
-                            max_width - 8
-                        } else {
-                            max_width - 9
-                        };
-
-                        let markdown = html2md::parse_html_custom(
-                            &html,
-                            &HashMap::default(),
-                            html2md::Config {
-                                max_length: width,
-                                new_line_break: "\n".to_string(),
-                                logger: None,
-                            },
-                        );
-                        let result = vec![
-                            Text::raw(selected_feature["name"].as_str().unwrap().to_string()),
-                            Text::raw(" ["),
-                            Text::styled(
-                                selected_feature["workflow_status"]["name"]
-                                    .as_str()
-                                    .unwrap()
-                                    .to_string(),
-                                Style::default().bg(Color::Rgb(
-                                    rgb1.0 as u8,
-                                    rgb1.1 as u8,
-                                    rgb1.2 as u8,
-                                )),
-                            ),
-                            Text::raw("]\n"),
-                            Text::raw(
-                                selected_feature["assigned_to_user"]["name"]
-                                    .as_str()
-                                    .unwrap_or("Unassigned")
-                                    .to_string(),
-                            ),
-                            Text::raw("\n"),
-                            Text::raw(selected_feature["url"].as_str().unwrap().to_string()),
-                            Text::raw("\n"),
-                            Text::raw("\n"),
-                            Text::raw(markdown),
-                        ];
-                        self.feature_text_formatted = Some(result.clone());
-                        result
+                            vec![]
+                        }
                     }
                 }
                 None => vec![],
