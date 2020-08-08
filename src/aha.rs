@@ -169,6 +169,11 @@ impl FeatureCreate {
                     notes: "Required".to_string(),
                 })
             }
+            if data == "No" {
+                self.custom_fields = Some(CustomNotes {
+                    notes: "Not required".to_string(),
+                })
+            }
             None
         }
     }
