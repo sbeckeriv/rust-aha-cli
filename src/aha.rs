@@ -1,14 +1,14 @@
 use super::Opt;
-use regex::Regex;
+
 use serde_json::Value;
-use std::collections::HashMap;
-use std::fs::File;
+
+
 use std::io::prelude::*;
-use std::io::BufReader;
-use std::process::Command;
-use termion::clear;
-use termion::cursor;
-use text_io::read;
+
+
+
+
+
 use url::Url;
 
 pub struct Aha<'a> {
@@ -92,17 +92,32 @@ impl<'a> Aha<'a> {
             .expect("Can not load features. Check your access in Aha!");
         releases.as_array().unwrap().to_vec()
     }
-    pub fn send_feature(&self, feature: &FeatureCreate) {
+    pub fn send_feature(&self, feature: &FeatureCreate) -> Result<Value, serde_json::Error> {
         let uri = format!("https://{}.aha.io/api/v1/features", self.domain);
-        let _response = self.client.post(&uri).json(&feature).send();
+        let response = self.client.post(&uri).json(&feature).send();
+        let content = response.unwrap().text();
+        if self.opt.verbose {
+            println!("created {:?}", content);
+        }
+        serde_json::from_str(&content.unwrap_or("".to_string()))
     }
 
-    pub fn send_requirement(&self, feature_ref: String, requirement: &RequirementCreate) {
+    pub fn send_requirement(
+        &self,
+        feature_ref: String,
+        requirement: &RequirementCreate,
+    ) -> Result<Value, serde_json::Error> {
         let uri = format!(
             "https://{}.aha.io/api/v1/features/{}/requirements",
             self.domain, feature_ref
         );
-        let _response = self.client.post(&uri).json(&requirement).send();
+
+        let response = self.client.post(&uri).json(&requirement).send();
+        let content = response.unwrap().text();
+        if self.opt.verbose {
+            println!("created {:?}", content);
+        }
+        serde_json::from_str(&content.unwrap_or("".to_string()))
     }
 
     pub fn get(&self, url: Url, base: String) -> Result<Value, serde_json::Error> {
@@ -157,10 +172,10 @@ impl FeatureCreate {
         }
     }
     pub fn advance(&mut self, data: String) -> Option<&str> {
-        if self.name.len() == 0 {
+        if self.name.is_empty() {
             self.name = data;
             Some("Description")
-        } else if self.description.len() == 0 {
+        } else if self.description.is_empty() {
             self.description = data;
             Some("Needs notes? (Yes/No)")
         } else {
@@ -195,10 +210,10 @@ impl RequirementCreate {
         }
     }
     pub fn advance(&mut self, data: String) -> Option<&str> {
-        if self.name.len() == 0 {
+        if self.name.is_empty() {
             self.name = data;
             Some("Description")
-        } else if self.description.len() == 0 {
+        } else if self.description.is_empty() {
             self.description = data;
             None
         } else {

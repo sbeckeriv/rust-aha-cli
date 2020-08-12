@@ -325,7 +325,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             let events_list = app
                 .events
                 .iter()
-                .map(|&(_, _)| Text::raw(format!("{}", app.debug_txt)));
+                .map(|&(_, _)| Text::raw(app.debug_txt.to_string()));
             let events_list = List::new(events_list)
                 .block(Block::default().borders(Borders::ALL).title("dbg"))
                 .start_corner(Corner::BottomLeft);

@@ -2,14 +2,14 @@ use super::key_layout::KeyLayout;
 use super::util::StatefulList;
 use super::Aha;
 
-use html2md;
+
 use scarlet::color::RGBColor;
 
 use super::util::event::Event;
 use serde_json::Value;
 
-use dirs;
-use slog;
+
+
 
 use slog::Drain;
 use std::fs::OpenOptions;
@@ -20,7 +20,7 @@ use std::io::prelude::*;
 use std::path::Path;
 use termion::event::Key;
 use tui::{
-    style::{Color, Modifier, Style},
+    style::{Color, Style},
     widgets::Text,
 };
 #[derive(PartialEq, Deserialize, Serialize, Clone)]
@@ -171,7 +171,7 @@ impl<'a> App<'a> {
         );
         if self.features.len() == 0 {
             self.features = StatefulList::with_items(vec![(
-                format!("No features loaded"),
+                "No features loaded".to_string(),
                 serde_json::Value::Null,
             )]);
         }
@@ -248,11 +248,11 @@ impl<'a> App<'a> {
         } else if input == "\n" {
             Key::Char('\n')
         } else if input.starts_with("alt+") {
-            let text = input.splitn(2, "+").collect::<Vec<_>>();
+            let text = input.splitn(2, '+').collect::<Vec<_>>();
             let text = text.last().unwrap();
             Key::Alt(text.as_bytes()[0] as char)
         } else if input.starts_with("ctrl+") {
-            let text = input.splitn(2, "+").collect::<Vec<_>>();
+            let text = input.splitn(2, '+').collect::<Vec<_>>();
             let text = text.last().unwrap();
             Key::Ctrl(text.as_bytes()[0] as char)
         } else {
@@ -271,7 +271,7 @@ impl<'a> App<'a> {
         let value: History = toml::from_str(&file).unwrap();
         let return_value = value.clone();
         if let Some(project) = value.project {
-            let project = project.to_string();
+            let project = project;
             if let Some(index) = self.items.items.iter().position(|x| x.1["id"] == project) {
                 let project_id = self.items.items[index].1["id"]
                     .as_str()
@@ -377,7 +377,7 @@ impl<'a> App<'a> {
                                 if feature.0.starts_with("└") || feature.0.starts_with("├") {
                                     let clean_string = feature
                                         .0
-                                        .splitn(2, " ")
+                                        .splitn(2, ' ')
                                         .collect::<Vec<_>>()
                                         .last()
                                         .unwrap()
@@ -410,7 +410,7 @@ impl<'a> App<'a> {
                                         "Feature {}",
                                         feature.1["reference_num"].as_str().unwrap()
                                     );
-                                    feature.1.clone()
+                                    feature.1
                                 };
                             self.feature_text = vec![selected_feature.to_string()];
                             let rgb1 = RGBColor::from_hex_code(
@@ -488,7 +488,7 @@ impl<'a> App<'a> {
         }
     }
 
-    pub fn handle_search_popup(&mut self, event: Event<Key>, aha: &Aha) -> Option<()> {
+    pub fn handle_search_popup(&mut self, event: Event<Key>, _aha: &Aha) -> Option<()> {
         match event {
             Event::Input(input) => {
                 if input == self.layout.escape {
@@ -517,13 +517,13 @@ impl<'a> App<'a> {
                     self.new_requirement = RequirementCreate::new();
                     self.text_box_title = "Requirement Name".to_string();
                 } else if input == Key::Char('\n') {
-                    self.debug_txt = format!("enter");
+                    self.debug_txt = "enter".to_string();
                     if let Some(title) = self.new_requirement.advance(self.text_box.to_string()) {
                         self.text_box_title = title.to_string();
 
                         self.text_box = "".to_string();
                     } else {
-                        self.debug_txt = format!("sending requirement");
+                        self.debug_txt = "sending requirement".to_string();
                         self.popup = Popup::None;
                         self.text_box = "".to_string();
                         // send
@@ -532,11 +532,34 @@ impl<'a> App<'a> {
                         let i = self.features.state.selected().unwrap();
                         let feature = self.features.items[i].clone();
                         let feature_ref = feature.1["reference_num"].as_str().unwrap().to_string();
-                        aha.send_requirement(feature_ref, &self.new_requirement);
 
-                        self.load_features(project.1["id"].as_str().unwrap().to_string(), &aha);
+                        match aha.send_requirement(feature_ref, &self.new_requirement) {
+                            Ok(x) => {
+                                self.debug_txt = format!(
+                                    "requirement created: {} {}",
+                                    x["requirement"]["reference_num"], x["requirement"]["url"]
+                                );
 
-                        self.debug_txt = format!("requirement created");
+                                self.load_features(
+                                    project.1["id"].as_str().unwrap().to_string(),
+                                    &aha,
+                                );
+                                let feature_id = x["requirement"]["id"].as_str().unwrap();
+
+                                if let Some(index) = self
+                                    .features
+                                    .items
+                                    .iter()
+                                    .position(|x| x.1["id"] == feature_id)
+                                {
+                                    self.features.state.select(Some(index));
+                                }
+                            }
+                            Err(_) => {
+                                self.debug_txt = "requirement error".to_string();
+                            }
+                        };
+
                         self.new_requirement = RequirementCreate::new();
                         self.text_box_title = "Requirement Name".to_string();
                     }
@@ -562,24 +585,47 @@ impl<'a> App<'a> {
                     self.new_feature = FeatureCreate::new();
                     self.text_box_title = "Feature Name".to_string();
                 } else if input == Key::Char('\n') {
-                    self.debug_txt = format!("enter");
+                    self.debug_txt = "enter".to_string();
                     if let Some(title) = self.new_feature.advance(self.text_box.to_string()) {
                         self.text_box_title = title.to_string();
 
                         self.text_box = "".to_string();
                     } else {
-                        self.debug_txt = format!("sending feature");
+                        self.debug_txt = "sending feature".to_string();
                         self.popup = Popup::None;
                         self.text_box = "".to_string();
                         // send
                         let i = self.releases.state.selected().unwrap();
                         let project = self.releases.items[i].clone();
                         self.new_feature.release_id = project.1["id"].as_str().unwrap().to_string();
-                        aha.send_feature(&self.new_feature);
+                        // show debug with helpful data after create and select
+                        match aha.send_feature(&self.new_feature) {
+                            Ok(x) => {
+                                self.debug_txt = format!(
+                                    "feature created: {} {}",
+                                    x["feature"]["reference_num"], x["feature"]["url"]
+                                );
 
-                        self.load_features(project.1["id"].as_str().unwrap().to_string(), &aha);
+                                self.load_features(
+                                    project.1["id"].as_str().unwrap().to_string(),
+                                    &aha,
+                                );
+                                let feature_id = x["feature"]["id"].as_str().unwrap();
 
-                        self.debug_txt = format!("feature created");
+                                if let Some(index) = self
+                                    .features
+                                    .items
+                                    .iter()
+                                    .position(|x| x.1["id"] == feature_id)
+                                {
+                                    self.features.state.select(Some(index));
+                                }
+                            }
+                            Err(_) => {
+                                self.debug_txt = "feature error".to_string();
+                            }
+                        };
+
                         self.new_feature = FeatureCreate::new();
                         self.text_box_title = "Feature Name".to_string();
                     }
@@ -603,14 +649,14 @@ impl<'a> App<'a> {
         match event {
             Event::Input(input) => {
                 if input == self.layout.quit {
-                    self.debug_txt = format!("q exit");
+                    self.debug_txt = "q exit".to_string();
                     None
                 } else if input == self.layout.search {
-                    self.debug_txt = format!("search");
+                    self.debug_txt = "search".to_string();
                     self.popup = Popup::Search;
                     Some(())
                 } else if input == self.layout.create {
-                    self.debug_txt = format!("create");
+                    self.debug_txt = "create".to_string();
                     if self.active_layer == Screen::Feature {
                         self.text_box_title = "Requirement Name".to_string();
                     } else {
@@ -620,7 +666,7 @@ impl<'a> App<'a> {
                     Some(())
                 } else if input == self.layout.left || input == self.layout.left_arrow {
                     self.feature_text_formatted = None;
-                    self.debug_txt = format!("back");
+                    self.debug_txt = "back".to_string();
                     if self.active_layer == Screen::Project {}
                     if self.active_layer == Screen::Release {
                         self.releases.unselect();
@@ -642,11 +688,9 @@ impl<'a> App<'a> {
                     || input == self.layout.right_alt
                 {
                     self.feature_text_formatted = None;
-                    self.debug_txt = format!("over");
-                    if self.active_layer == Screen::Features {
-                        if self.features.state.selected().is_some() {
-                            self.active_layer = Screen::Feature;
-                        };
+                    self.debug_txt = "over".to_string();
+                    if self.active_layer == Screen::Features && self.features.state.selected().is_some() {
+                        self.active_layer = Screen::Feature;
                     }
                     if self.active_layer == Screen::Release {
                         match self.releases.state.selected() {
@@ -679,7 +723,7 @@ impl<'a> App<'a> {
                     Some(())
                 } else if input == self.layout.down || input == self.layout.down_arrow {
                     self.feature_text_formatted = None;
-                    self.debug_txt = format!("down");
+                    self.debug_txt = "down".to_string();
                     match self.active_layer {
                         Screen::Project => self.items.next(),
                         Screen::Release => self.releases.next(),
@@ -691,7 +735,7 @@ impl<'a> App<'a> {
                     Some(())
                 } else if input == self.layout.up || input == self.layout.up_arrow {
                     self.feature_text_formatted = None;
-                    self.debug_txt = format!("up");
+                    self.debug_txt = "up".to_string();
                     match self.active_layer {
                         Screen::Project => self.items.previous(),
                         Screen::Release => self.releases.previous(),
